@@ -1,0 +1,1688 @@
+openapi: 3.0.3
+info:
+  title: Household Meal Planning API
+  description: |
+    RESTful API for the Household Meal Planning & Inventory System.
+
+    This API provides endpoints for:
+    - User authentication and management
+    - Recipe management with versioning
+    - Inventory tracking with history
+    - Recipe ratings and feedback
+    - Weekly menu planning
+    - Shopping list generation
+
+    **Base URL**: `/api`
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/your-org/meal-planning-system
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development server
+  - url: https://meal-planner.local/api
+    description: Production server (local network)
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Users
+    description: User management (admin only)
+  - name: Recipes
+    description: Recipe CRUD operations and versioning
+  - name: Inventory
+    description: Kitchen inventory management
+  - name: Ratings
+    description: Recipe ratings and feedback
+  - name: Menu Planning
+    description: Weekly menu planning
+  - name: Shopping Lists
+    description: Shopping list generation
+  - name: Admin
+    description: Administrative endpoints
+
+security:
+  - cookieAuth: []
+
+paths:
+  # ============================================================================
+  # AUTHENTICATION
+  # ============================================================================
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register new user
+      description: Create a new user account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 50
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                  description: Password (will be hashed)
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Username or email already exists
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login user
+      description: Authenticate user and create session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: session=abc123; Path=/; HttpOnly; Secure; SameSite=Strict
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  message:
+                    type: string
+                    example: Login successful
+        '401':
+          description: Invalid credentials
+        '429':
+          description: Too many login attempts (rate limited)
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout user
+      description: End current session
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logout successful
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user
+      description: Retrieve currently authenticated user info
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================================
+  # RECIPES
+  # ============================================================================
+  /recipes:
+    get:
+      tags: [Recipes]
+      summary: List recipes
+      description: Get paginated list of recipes with filters
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: search
+          in: query
+          description: Full-text search on title and description
+          schema:
+            type: string
+        - name: tags
+          in: query
+          description: Filter by tags (comma-separated)
+          schema:
+            type: string
+            example: vegetarian,quick-meals
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+        - name: filter
+          in: query
+          description: Special filters
+          schema:
+            type: string
+            enum: [favorites, not_recent, never_tried, available_inventory]
+      responses:
+        '200':
+          description: List of recipes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recipes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecipeSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Recipes]
+      summary: Create recipe
+      description: Create a new recipe (version 1)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecipeCreate'
+      responses:
+        '201':
+          description: Recipe created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recipe'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /recipes/{recipeId}:
+    get:
+      tags: [Recipes]
+      summary: Get recipe
+      description: Get recipe with current version
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+      responses:
+        '200':
+          description: Recipe details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recipe'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Recipes]
+      summary: Update recipe
+      description: Update recipe (creates new version)
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecipeUpdate'
+      responses:
+        '200':
+          description: Recipe updated (new version created)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recipe'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Recipes]
+      summary: Delete recipe
+      description: Soft delete recipe (set is_deleted=true)
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+      responses:
+        '204':
+          description: Recipe deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /recipes/{recipeId}/versions:
+    get:
+      tags: [Recipes]
+      summary: List recipe versions
+      description: Get all versions of a recipe
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+      responses:
+        '200':
+          description: List of versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recipe_id:
+                    type: string
+                    format: uuid
+                  current_version:
+                    type: integer
+                  versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecipeVersion'
+
+  /recipes/{recipeId}/versions/{version}:
+    get:
+      tags: [Recipes]
+      summary: Get specific version
+      description: Get recipe at specific version number
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Recipe at specific version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recipe'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /recipes/{recipeId}/revert/{version}:
+    put:
+      tags: [Recipes]
+      summary: Revert to version
+      description: Revert recipe to a previous version (creates new version as copy)
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Recipe reverted (new version created)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recipe'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /recipes/scrape:
+    post:
+      tags: [Recipes]
+      summary: Scrape recipe from URL
+      description: |
+        Scrape recipe from a website URL.
+        Respects robots.txt and implements rate limiting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: https://example.com/recipes/chocolate-cake
+      responses:
+        '200':
+          description: Recipe scraped successfully (for review before saving)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scraped_data:
+                    $ref: '#/components/schemas/RecipeCreate'
+                  source_url:
+                    type: string
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Invalid URL or scraping not allowed
+        '429':
+          description: Rate limit exceeded (1 req per 5 sec per domain)
+
+  /recipes/suggestions:
+    get:
+      tags: [Recipes]
+      summary: Get recipe suggestions
+      description: |
+        Get suggested recipes based on:
+        - Available inventory
+        - Household favorites
+        - Rotation (not recently cooked)
+      responses:
+        '200':
+          description: Suggested recipes with scores
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        recipe:
+                          $ref: '#/components/schemas/RecipeSummary'
+                        score:
+                          type: integer
+                          description: Suggestion score (higher is better)
+                        reasons:
+                          type: array
+                          items:
+                            type: string
+                          example: [all_ingredients_available, household_favorite, not_cooked_recently]
+
+  # ============================================================================
+  # INVENTORY
+  # ============================================================================
+  /inventory:
+    get:
+      tags: [Inventory]
+      summary: List inventory items
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: location
+          in: query
+          schema:
+            type: string
+            enum: [pantry, fridge, freezer, other]
+        - name: low_stock
+          in: query
+          description: Only show low stock items
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of inventory items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InventoryItem'
+
+    post:
+      tags: [Inventory]
+      summary: Add inventory item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryItemCreate'
+      responses:
+        '201':
+          description: Item added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /inventory/{itemId}:
+    get:
+      tags: [Inventory]
+      summary: Get inventory item
+      parameters:
+        - $ref: '#/components/parameters/ItemId'
+      responses:
+        '200':
+          description: Inventory item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Inventory]
+      summary: Update inventory item
+      parameters:
+        - $ref: '#/components/parameters/ItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryItemUpdate'
+      responses:
+        '200':
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Inventory]
+      summary: Delete inventory item
+      parameters:
+        - $ref: '#/components/parameters/ItemId'
+      responses:
+        '204':
+          description: Item deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /inventory/low-stock:
+    get:
+      tags: [Inventory]
+      summary: Get low stock items
+      description: Items where quantity <= minimum_stock
+      responses:
+        '200':
+          description: Low stock items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InventoryItem'
+
+  /inventory/expiring:
+    get:
+      tags: [Inventory]
+      summary: Get expiring items
+      description: Items expiring within warning period (default 7 days)
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+      responses:
+        '200':
+          description: Expiring items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/InventoryItem'
+                        - type: object
+                          properties:
+                            days_until_expiration:
+                              type: integer
+
+  /inventory/{itemId}/history:
+    get:
+      tags: [Inventory]
+      summary: Get item history
+      description: Get quantity change history for item
+      parameters:
+        - $ref: '#/components/parameters/ItemId'
+      responses:
+        '200':
+          description: Item history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item_id:
+                    type: string
+                    format: uuid
+                  history:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InventoryHistory'
+
+  # ============================================================================
+  # RATINGS
+  # ============================================================================
+  /recipes/{recipeId}/ratings:
+    get:
+      tags: [Ratings]
+      summary: Get recipe ratings
+      description: Get all ratings for a recipe
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+      responses:
+        '200':
+          description: Recipe ratings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recipe_id:
+                    type: string
+                    format: uuid
+                  ratings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Rating'
+                  summary:
+                    type: object
+                    properties:
+                      thumbs_up_count:
+                        type: integer
+                      thumbs_down_count:
+                        type: integer
+                      total_ratings:
+                        type: integer
+                      is_favorite:
+                        type: boolean
+
+    post:
+      tags: [Ratings]
+      summary: Rate recipe
+      description: Create or update rating for recipe
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatingCreate'
+      responses:
+        '201':
+          description: Rating created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /recipes/{recipeId}/ratings/{ratingId}:
+    put:
+      tags: [Ratings]
+      summary: Update rating
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+        - name: ratingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatingCreate'
+      responses:
+        '200':
+          description: Rating updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Ratings]
+      summary: Delete rating
+      parameters:
+        - $ref: '#/components/parameters/RecipeId'
+        - name: ratingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Rating deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # MENU PLANNING
+  # ============================================================================
+  /menu-plans:
+    get:
+      tags: [Menu Planning]
+      summary: List menu plans
+      parameters:
+        - name: week_start
+          in: query
+          description: Filter by week start date (YYYY-MM-DD, must be Monday)
+          schema:
+            type: string
+            format: date
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: List of menu plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  menu_plans:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MenuPlan'
+
+    post:
+      tags: [Menu Planning]
+      summary: Create menu plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuPlanCreate'
+      responses:
+        '201':
+          description: Menu plan created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /menu-plans/{planId}:
+    get:
+      tags: [Menu Planning]
+      summary: Get menu plan
+      parameters:
+        - $ref: '#/components/parameters/PlanId'
+      responses:
+        '200':
+          description: Menu plan details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuPlan'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Menu Planning]
+      summary: Update menu plan
+      parameters:
+        - $ref: '#/components/parameters/PlanId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuPlanUpdate'
+      responses:
+        '200':
+          description: Menu plan updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Menu Planning]
+      summary: Delete menu plan
+      parameters:
+        - $ref: '#/components/parameters/PlanId'
+      responses:
+        '204':
+          description: Menu plan deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /menu-plans/{planId}/meals/{mealId}/cooked:
+    post:
+      tags: [Menu Planning]
+      summary: Mark meal as cooked
+      description: |
+        Mark meal as cooked. This triggers:
+        - Inventory auto-deduction for ingredients
+        - Update recipe.last_cooked_date and times_cooked
+      parameters:
+        - $ref: '#/components/parameters/PlanId'
+        - name: mealId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Meal marked as cooked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meal:
+                    $ref: '#/components/schemas/PlannedMeal'
+                  inventory_changes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        item_name:
+                          type: string
+                        quantity_deducted:
+                          type: number
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # SHOPPING LISTS
+  # ============================================================================
+  /shopping-list/{planId}:
+    get:
+      tags: [Shopping Lists]
+      summary: Generate shopping list
+      description: |
+        Generate shopping list for menu plan.
+        Compares recipe ingredients vs. current inventory.
+      parameters:
+        - $ref: '#/components/parameters/PlanId'
+        - name: grouped
+          in: query
+          description: Group by category
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Shopping list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingList'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shopping-list/{listId}/items/{itemId}/check:
+    post:
+      tags: [Shopping Lists]
+      summary: Mark item as purchased
+      description: Mark item as purchased and update inventory
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Item marked as purchased
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  inventory_updated:
+                    type: boolean
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # ADMIN
+  # ============================================================================
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List all users (admin only)
+      security:
+        - cookieAuth: [admin]
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Admin]
+      summary: Create user (admin only)
+      security:
+        - cookieAuth: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{userId}:
+    put:
+      tags: [Admin]
+      summary: Update user (admin only)
+      security:
+        - cookieAuth: [admin]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Admin]
+      summary: Delete user (admin only)
+      security:
+        - cookieAuth: [admin]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: User deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/settings:
+    get:
+      tags: [Admin]
+      summary: Get app settings (admin only)
+      security:
+        - cookieAuth: [admin]
+      responses:
+        '200':
+          description: App settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    put:
+      tags: [Admin]
+      summary: Update app settings (admin only)
+      security:
+        - cookieAuth: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppSettings'
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+# ==============================================================================
+# COMPONENTS
+# ==============================================================================
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+
+  parameters:
+    RecipeId:
+      name: recipeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    PlanId:
+      name: planId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Bad request (invalid input)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized (authentication required)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden (insufficient permissions)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    # ==========================================================================
+    # COMMON SCHEMAS
+    # ==========================================================================
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total_pages:
+          type: integer
+        total_items:
+          type: integer
+
+    # ==========================================================================
+    # USER SCHEMAS
+    # ==========================================================================
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, user, child]
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+
+    UserCreate:
+      type: object
+      required: [username, email, password, role]
+      properties:
+        username:
+          type: string
+          minLength: 3
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        role:
+          type: string
+          enum: [admin, user, child]
+
+    UserUpdate:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+        is_active:
+          type: boolean
+
+    # ==========================================================================
+    # RECIPE SCHEMAS
+    # ==========================================================================
+    RecipeSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        prep_time_minutes:
+          type: integer
+        cook_time_minutes:
+          type: integer
+        servings:
+          type: integer
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        tags:
+          type: array
+          items:
+            type: string
+        is_favorite:
+          type: boolean
+        last_cooked_date:
+          type: string
+          format: date
+
+    Recipe:
+      allOf:
+        - $ref: '#/components/schemas/RecipeSummary'
+        - type: object
+          properties:
+            source_url:
+              type: string
+            source_type:
+              type: string
+              enum: [manual, scraped]
+            current_version:
+              type: integer
+            ingredients:
+              type: array
+              items:
+                $ref: '#/components/schemas/Ingredient'
+            instructions:
+              type: string
+            images:
+              type: array
+              items:
+                type: string
+            nutritional_info:
+              type: object
+            created_by:
+              type: string
+              format: uuid
+            created_at:
+              type: string
+              format: date-time
+
+    RecipeCreate:
+      type: object
+      required: [title, ingredients, instructions]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        prep_time_minutes:
+          type: integer
+        cook_time_minutes:
+          type: integer
+        servings:
+          type: integer
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        ingredients:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngredientInput'
+        instructions:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source_url:
+          type: string
+
+    RecipeUpdate:
+      allOf:
+        - $ref: '#/components/schemas/RecipeCreate'
+        - type: object
+          properties:
+            change_description:
+              type: string
+              description: Description of what changed
+
+    RecipeVersion:
+      type: object
+      properties:
+        version_number:
+          type: integer
+        prep_time_minutes:
+          type: integer
+        cook_time_minutes:
+          type: integer
+        servings:
+          type: integer
+        difficulty:
+          type: string
+        ingredients:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ingredient'
+        instructions:
+          type: string
+        change_description:
+          type: string
+        modified_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    Ingredient:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        category:
+          type: string
+        is_optional:
+          type: boolean
+
+    IngredientInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        category:
+          type: string
+        is_optional:
+          type: boolean
+
+    # ==========================================================================
+    # INVENTORY SCHEMAS
+    # ==========================================================================
+    InventoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        item_name:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        category:
+          type: string
+        location:
+          type: string
+          enum: [pantry, fridge, freezer, other]
+        expiration_date:
+          type: string
+          format: date
+        minimum_stock:
+          type: number
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    InventoryItemCreate:
+      type: object
+      required: [item_name, quantity]
+      properties:
+        item_name:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        category:
+          type: string
+        location:
+          type: string
+        expiration_date:
+          type: string
+          format: date
+        minimum_stock:
+          type: number
+        notes:
+          type: string
+
+    InventoryItemUpdate:
+      type: object
+      properties:
+        item_name:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        category:
+          type: string
+        location:
+          type: string
+        expiration_date:
+          type: string
+          format: date
+        minimum_stock:
+          type: number
+        notes:
+          type: string
+
+    InventoryHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        change_type:
+          type: string
+          enum: [purchased, used, expired, adjusted, auto_deducted]
+        quantity_before:
+          type: number
+        quantity_after:
+          type: number
+        quantity_change:
+          type: number
+        reason:
+          type: string
+        changed_by:
+          type: string
+          format: uuid
+        changed_at:
+          type: string
+          format: date-time
+
+    # ==========================================================================
+    # RATING SCHEMAS
+    # ==========================================================================
+    Rating:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        recipe_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        rating:
+          type: boolean
+          description: true = thumbs up, false = thumbs down
+        feedback:
+          type: string
+        modifications:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RatingCreate:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: boolean
+        feedback:
+          type: string
+        modifications:
+          type: string
+
+    # ==========================================================================
+    # MENU PLANNING SCHEMAS
+    # ==========================================================================
+    MenuPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        week_start_date:
+          type: string
+          format: date
+        week_end_date:
+          type: string
+          format: date
+        name:
+          type: string
+        meals:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlannedMeal'
+        created_by:
+          type: string
+          format: uuid
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    MenuPlanCreate:
+      type: object
+      required: [week_start_date]
+      properties:
+        week_start_date:
+          type: string
+          format: date
+          description: Must be a Monday
+        name:
+          type: string
+
+    MenuPlanUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        is_active:
+          type: boolean
+        meals:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlannedMealInput'
+
+    PlannedMeal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        recipe:
+          $ref: '#/components/schemas/RecipeSummary'
+        meal_date:
+          type: string
+          format: date
+        meal_type:
+          type: string
+          enum: [breakfast, lunch, dinner, snack]
+        servings_planned:
+          type: integer
+        notes:
+          type: string
+        cooked:
+          type: boolean
+        cooked_date:
+          type: string
+          format: date-time
+        cooked_by:
+          type: string
+          format: uuid
+
+    PlannedMealInput:
+      type: object
+      required: [recipe_id, meal_date, meal_type]
+      properties:
+        recipe_id:
+          type: string
+          format: uuid
+        meal_date:
+          type: string
+          format: date
+        meal_type:
+          type: string
+          enum: [breakfast, lunch, dinner, snack]
+        servings_planned:
+          type: integer
+        notes:
+          type: string
+
+    # ==========================================================================
+    # SHOPPING LIST SCHEMAS
+    # ==========================================================================
+    ShoppingList:
+      type: object
+      properties:
+        menu_plan_id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShoppingListItem'
+        generated_at:
+          type: string
+          format: date-time
+
+    ShoppingListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        category:
+          type: string
+        needed_for_recipes:
+          type: array
+          items:
+            type: string
+          description: Recipe IDs that need this ingredient
+        in_stock:
+          type: boolean
+        checked:
+          type: boolean
+
+    # ==========================================================================
+    # ADMIN SCHEMAS
+    # ==========================================================================
+    AppSettings:
+      type: object
+      properties:
+        favorites_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Percentage of thumbs up required for favorite (0.75 = 75%)
+        favorites_min_raters:
+          type: integer
+          minimum: 1
+          description: Minimum number of raters required
+        rotation_period_days:
+          type: integer
+          minimum: 1
+          description: Days before recipe considered "not recently cooked"
+        low_stock_threshold_percent:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Percentage of minimum stock for low stock alert
+        expiration_warning_days:
+          type: integer
+          minimum: 0
+          description: Days before expiration to show warning
+        updated_at:
+          type: string
+          format: date-time
