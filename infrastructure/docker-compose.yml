@@ -1,0 +1,169 @@
+# ============================================================================
+# Docker Compose Configuration
+# Household Meal Planning System
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # PostgreSQL Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: meal_planner_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-household_db}
+      POSTGRES_USER: ${DB_USER:-household_app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password required}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+      - ../database/schemas:/docker-entrypoint-initdb.d/schemas:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-household_app} -d ${DB_NAME:-household_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================================================
+  # Backend API (FastAPI)
+  # ==========================================================================
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: meal_planner_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-household_db}
+      DB_USER: ${DB_USER:-household_app}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DATABASE_URL: postgresql://${DB_USER:-household_app}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-household_db}
+
+      # Application
+      APP_NAME: "Household Meal Planning System"
+      APP_VERSION: "1.0.0"
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-false}
+
+      # Authentication
+      JWT_SECRET: ${JWT_SECRET:?JWT secret required}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+      SESSION_SECRET: ${SESSION_SECRET:?Session secret required}
+
+      # Recipe Scraping
+      SCRAPER_USER_AGENT: "${SCRAPER_USER_AGENT:-HouseholdMealPlanner/1.0}"
+      SCRAPER_RATE_LIMIT: ${SCRAPER_RATE_LIMIT:-5}
+      SCRAPER_TIMEOUT: ${SCRAPER_TIMEOUT:-10}
+
+      # File Upload
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-5242880}
+      UPLOAD_PATH: /app/uploads
+
+      # CORS (for local development)
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://meal-planner.local}
+
+    volumes:
+      - uploads_data:/app/uploads
+      - ../backend/src:/app/src:ro  # Development: live reload
+    ports:
+      - "8000:8000"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ==========================================================================
+  # Frontend (Next.js)
+  # ==========================================================================
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: meal_planner_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      NEXT_TELEMETRY_DISABLED: 1
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/healthz', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ==========================================================================
+  # Nginx Reverse Proxy
+  # ==========================================================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: meal_planner_nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  app-network:
+    driver: bridge
+    name: meal_planner_network
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  postgres_data:
+    name: meal_planner_postgres_data
+    driver: local
+
+  uploads_data:
+    name: meal_planner_uploads
+    driver: local
+
+  nginx_logs:
+    name: meal_planner_nginx_logs
+    driver: local

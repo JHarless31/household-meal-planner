@@ -10,8 +10,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Python virtual environment libs (not frontend/src/lib)
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -108,3 +109,14 @@ coverage/
 # OS
 Thumbs.db
 .DS_Store
+
+# Development artifacts (Claude Code / Multi-agent framework)
+.claude/
+agents_config.py
+orchestrator.py
+meal-planning-app-prompt.md
+PHASE_*_IMPLEMENTATION_REPORT.md
+PHASE_*_TESTING_REPORT.md
+
+# Root level test directory (Crew AI artifact)
+/tests/

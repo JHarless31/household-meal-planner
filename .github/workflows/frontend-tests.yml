@@ -1,0 +1,92 @@
+name: Frontend Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-tests.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: ['18.x', '20.x']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      working-directory: frontend
+      run: npm ci
+
+    - name: Run linting
+      working-directory: frontend
+      run: |
+        npm run lint
+        npm run format:check
+
+    - name: Run type checking
+      working-directory: frontend
+      run: npm run type-check
+
+    - name: Run unit tests
+      working-directory: frontend
+      run: npm run test:coverage
+
+    - name: Check coverage threshold
+      working-directory: frontend
+      run: |
+        node -e "
+          const coverage = require('./coverage/coverage-summary.json');
+          const total = coverage.total;
+          const threshold = 70;
+          if (total.lines.pct < threshold || total.statements.pct < threshold) {
+            console.error(\`Coverage below threshold: \${Math.min(total.lines.pct, total.statements.pct)}% < \${threshold}%\`);
+            process.exit(1);
+          }
+        "
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: frontend/coverage/coverage-final.json
+        flags: frontend
+        name: frontend-coverage
+
+    - name: Build application
+      working-directory: frontend
+      env:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+      run: npm run build
+
+    - name: Run accessibility tests
+      working-directory: frontend
+      run: npm run test:a11y || true
+
+    - name: Bundle size check
+      working-directory: frontend
+      run: |
+        npm run build:analyze || true
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: ArtiomTr/jest-coverage-report-action@v2
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: frontend
+        threshold: 70
