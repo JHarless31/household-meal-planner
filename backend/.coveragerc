@@ -1,0 +1,51 @@
+[run]
+# Coverage configuration
+source = src
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */venv/*
+    */virtualenv/*
+    */migrations/*
+    */__init__.py
+    */conftest.py
+
+[report]
+# Reporting options
+precision = 2
+show_missing = True
+skip_covered = False
+
+# Fail if coverage is below threshold
+fail_under = 80
+
+exclude_lines =
+    # Standard pragma
+    pragma: no cover
+
+    # Defensive programming
+    raise AssertionError
+    raise NotImplementedError
+
+    # Debugging code
+    def __repr__
+    if self\.debug
+
+    # Type checking
+    if TYPE_CHECKING:
+    @overload
+
+    # Abstract methods
+    @abstractmethod
+
+    # Non-runnable code
+    if __name__ == .__main__.:
+    if 0:
+    if False:
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml
