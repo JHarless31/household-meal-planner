@@ -250,6 +250,58 @@ class RecipeScraper:
             return '\n'.join(steps)
         return ""
 
+    def _try_recipe_scrapers_library(self, url: str) -> Optional[Dict]:
+        """
+        Try to scrape using the recipe-scrapers library.
+
+        Args:
+            url: Recipe URL
+
+        Returns:
+            Recipe data dict or None
+        """
+        try:
+            from recipe_scrapers import scrape_me
+
+            scraper = scrape_me(url, wild_mode=True)
+
+            # Extract data using recipe-scrapers API
+            recipe_data = {
+                'title': scraper.title() or '',
+                'description': scraper.description() or '',
+                'prep_time_minutes': scraper.prep_time() or None,
+                'cook_time_minutes': scraper.cook_time() or None,
+                'servings': scraper.yields() or None,
+                'ingredients': [],
+                'instructions': ''
+            }
+
+            # Parse ingredients
+            ingredients_list = scraper.ingredients() or []
+            for ing in ingredients_list:
+                recipe_data['ingredients'].append(IngredientInput(
+                    name=ing.strip(),
+                    quantity=None,
+                    unit=None
+                ))
+
+            # Parse instructions
+            instructions_list = scraper.instructions_list() or []
+            if instructions_list:
+                recipe_data['instructions'] = '\n'.join([f"{i+1}. {inst}" for i, inst in enumerate(instructions_list)])
+            else:
+                recipe_data['instructions'] = scraper.instructions() or ''
+
+            # Parse servings if it's a string
+            if isinstance(recipe_data['servings'], str):
+                recipe_data['servings'] = self._parse_servings(recipe_data['servings'])
+
+            return recipe_data if recipe_data['title'] else None
+
+        except Exception as e:
+            logger.info(f"recipe-scrapers library failed: {e}")
+            return None
+
     def scrape_recipe(self, url: str) -> Tuple[Optional[RecipeCreate], List[str], Optional[str]]:
         """
         Scrape recipe from URL.
@@ -281,9 +333,14 @@ class RecipeScraper:
         # Try JSON-LD first (most reliable)
         recipe_data = self._parse_recipe_json_ld(soup)
 
+        # If JSON-LD failed, try recipe-scrapers library
         if not recipe_data:
-            warnings.append("Could not find structured recipe data (JSON-LD)")
-            return None, warnings, "Recipe data not found. The site may not support structured data."
+            warnings.append("JSON-LD structured data not found, trying recipe-scrapers library")
+            recipe_data = self._try_recipe_scrapers_library(url)
+
+        if not recipe_data:
+            warnings.append("Could not extract recipe data with any method")
+            return None, warnings, "Recipe data not found. The site may not be supported."
 
         # Validate required fields
         if not recipe_data.get('title'):

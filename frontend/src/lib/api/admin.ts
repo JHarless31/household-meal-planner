@@ -57,4 +57,40 @@ export const adminApi = {
     const response = await apiClient.put<AppSettings>('/admin/settings', data);
     return response.data;
   },
+
+  /**
+   * Get system statistics
+   */
+  getStatistics: async (): Promise<SystemStatistics> => {
+    const response = await apiClient.get<SystemStatistics>('/admin/statistics');
+    return response.data;
+  },
 };
+
+export interface SystemStatistics {
+  totals: {
+    users: number;
+    recipes: number;
+    menu_plans: number;
+    inventory_items: number;
+    active_users: number;
+    low_stock_items: number;
+  };
+  most_cooked_recipes: Array<{
+    recipe_id: string;
+    title: string;
+    times_cooked: number;
+  }>;
+  most_favorited_recipes: Array<{
+    recipe_id: string;
+    title: string;
+    avg_rating: number;
+    rating_count: number;
+  }>;
+  difficulty_distribution: Record<string, number>;
+  recipes_over_time: Array<{
+    month: string;
+    count: number;
+  }>;
+  generated_at: string;
+}

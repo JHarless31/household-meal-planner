@@ -401,6 +401,28 @@ WHERE r.is_deleted = false
 GROUP BY r.id, r.title;
 
 -- ============================================================================
+-- ADDITIONAL PERFORMANCE INDEXES (Phase 4 Optimizations)
+-- ============================================================================
+
+-- Composite index for recipe suggestions by rotation
+CREATE INDEX IF NOT EXISTS idx_recipes_rotation ON meal_planning.recipes(is_deleted, last_cooked_date ASC NULLS FIRST, times_cooked ASC);
+
+-- Index for rating aggregations (favorites view)
+CREATE INDEX IF NOT EXISTS idx_ratings_recipe_rating ON meal_planning.ratings(recipe_id, rating);
+
+-- Index for menu plan queries by date range
+CREATE INDEX IF NOT EXISTS idx_menu_plans_week ON meal_planning.menu_plans(week_start_date DESC, is_active);
+
+-- Index for planned meals by date range
+CREATE INDEX IF NOT EXISTS idx_planned_meals_date ON meal_planning.planned_meals(meal_date, cooked);
+
+-- Index for inventory low stock queries
+CREATE INDEX IF NOT EXISTS idx_inventory_threshold ON meal_planning.inventory(quantity, threshold) WHERE quantity <= threshold;
+
+-- Composite index for recipe search and filtering
+CREATE INDEX IF NOT EXISTS idx_recipes_filter ON meal_planning.recipes(is_deleted, current_version) WHERE is_deleted = false;
+
+-- ============================================================================
 -- COMMENTS
 -- ============================================================================
 

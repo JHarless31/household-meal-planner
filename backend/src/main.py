@@ -11,7 +11,7 @@ import logging
 
 from src.core.config import settings
 from src.core.database import engine, Base
-from src.api import auth, recipes, inventory, ratings, menu_plans, shopping_lists, admin
+from src.api import auth, recipes, inventory, ratings, menu_plans, shopping_lists, admin, notifications
 
 # Configure logging
 logging.basicConfig(
@@ -92,6 +92,7 @@ app.include_router(inventory.router, prefix="/api/inventory", tags=["Inventory"]
 app.include_router(ratings.router, prefix="/api", tags=["Ratings"])
 app.include_router(menu_plans.router, prefix="/api/menu-plans", tags=["Menu Planning"])
 app.include_router(shopping_lists.router, prefix="/api/shopping-list", tags=["Shopping Lists"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 # ============================================================================

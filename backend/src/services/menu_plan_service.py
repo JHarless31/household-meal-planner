@@ -229,3 +229,148 @@ class MenuPlanService:
         db.delete(meal)
         db.commit()
         return True
+
+    @staticmethod
+    def copy_menu_plan(
+        db: Session,
+        plan_id: UUID,
+        new_week_start: date,
+        user_id: UUID
+    ) -> Optional[MenuPlan]:
+        """
+        Copy an existing menu plan to a new week.
+
+        Args:
+            db: Database session
+            plan_id: Plan ID to copy
+            new_week_start: Start date for new plan
+            user_id: User creating the copy
+
+        Returns:
+            New menu plan or None if source not found
+        """
+        # Get source plan
+        source_plan = db.query(MenuPlan).filter(MenuPlan.id == plan_id).first()
+        if not source_plan:
+            return None
+
+        # Get source meals
+        source_meals = db.query(PlannedMeal).filter(
+            PlannedMeal.menu_plan_id == plan_id
+        ).all()
+
+        # Create new plan
+        new_plan = MenuPlan(
+            week_start_date=new_week_start,
+            name=f"{source_plan.name} (Copy)",
+            created_by=user_id
+        )
+        db.add(new_plan)
+        db.flush()  # Get the ID
+
+        # Copy meals with adjusted dates
+        week_offset = (new_week_start - source_plan.week_start_date).days
+
+        for source_meal in source_meals:
+            new_meal = PlannedMeal(
+                menu_plan_id=new_plan.id,
+                recipe_id=source_meal.recipe_id,
+                meal_date=source_meal.meal_date + timedelta(days=week_offset),
+                meal_type=source_meal.meal_type,
+                servings_planned=source_meal.servings_planned,
+                notes=source_meal.notes
+            )
+            db.add(new_meal)
+
+        db.commit()
+        db.refresh(new_plan)
+        return new_plan
+
+    @staticmethod
+    def suggest_week_plan(
+        db: Session,
+        week_start: date,
+        user_id: UUID,
+        strategy: str = "rotation"
+    ) -> MenuPlan:
+        """
+        Auto-generate a week plan using recipe suggestions.
+
+        Creates a plan with variety (no recipe twice in same week).
+
+        Args:
+            db: Database session
+            week_start: Start date for the week
+            user_id: User creating the plan
+            strategy: Suggestion strategy to use
+
+        Returns:
+            Generated menu plan
+        """
+        from src.services.recipe_suggestions import RecipeSuggestionService
+
+        # Create new plan
+        plan = MenuPlan(
+            week_start_date=week_start,
+            name=f"Suggested Plan - Week of {week_start.isoformat()}",
+            created_by=user_id
+        )
+        db.add(plan)
+        db.flush()
+
+        # Get recipe suggestions (request more than needed for variety)
+        suggestions = RecipeSuggestionService.get_suggestions(
+            db,
+            user_id,
+            strategy,
+            limit=30
+        )
+
+        if not suggestions:
+            # If no suggestions, just create empty plan
+            db.commit()
+            db.refresh(plan)
+            return plan
+
+        # Define meal structure for the week (14 meals: lunch and dinner for 7 days)
+        meal_types = ["lunch", "dinner"]
+        used_recipe_ids = set()
+        suggestion_index = 0
+
+        for day_offset in range(7):
+            meal_date = week_start + timedelta(days=day_offset)
+
+            for meal_type in meal_types:
+                # Find next unused recipe
+                recipe_id = None
+                while suggestion_index < len(suggestions):
+                    candidate_id = suggestions[suggestion_index]["recipe_id"]
+                    suggestion_index += 1
+
+                    if candidate_id not in used_recipe_ids:
+                        recipe_id = candidate_id
+                        used_recipe_ids.add(recipe_id)
+                        break
+
+                # If we ran out of suggestions, stop adding meals
+                if not recipe_id:
+                    break
+
+                # Add meal to plan
+                meal = PlannedMeal(
+                    menu_plan_id=plan.id,
+                    recipe_id=UUID(recipe_id),
+                    meal_date=meal_date,
+                    meal_type=meal_type,
+                    servings_planned=4,  # Default servings
+                    notes=None
+                )
+                db.add(meal)
+
+            # If we ran out of suggestions, stop adding days
+            if suggestion_index >= len(suggestions):
+                break
+
+        db.commit()
+        db.refresh(plan)
+        return plan

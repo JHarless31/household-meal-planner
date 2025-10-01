@@ -125,6 +125,12 @@ class ShoppingListService:
                     if quantity_needed <= 0:
                         continue
 
+            # Calculate smart display message
+            current_stock = item.quantity if item else Decimal(0)
+            notes = None
+            if item and current_stock > 0:
+                notes = f"Stock: {current_stock} {data['unit'] or ''}, Need: {quantity_needed + current_stock} {data['unit'] or ''}"
+
             shopping_item = ShoppingListItem(
                 id=uuid4(),
                 name=name.title(),

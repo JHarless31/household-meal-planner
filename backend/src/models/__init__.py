@@ -9,6 +9,7 @@ from src.models.inventory import InventoryItem, InventoryHistory
 from src.models.rating import Rating
 from src.models.menu_plan import MenuPlan, PlannedMeal
 from src.models.app_settings import AppSettings
+from src.models.notification import Notification
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "MenuPlan",
     "PlannedMeal",
     "AppSettings",
+    "Notification",
 ]

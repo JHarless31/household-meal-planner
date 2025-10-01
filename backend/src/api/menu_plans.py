@@ -43,3 +43,57 @@ async def mark_meal_cooked(planId: UUID, mealId: UUID, db: Session = Depends(get
     meal, changes = MenuPlanService.mark_meal_cooked(db, planId, mealId, current_user.id)
     if not meal: raise HTTPException(status_code=404, detail="Meal not found")
     return {"meal": meal, "inventory_changes": changes}
+
+@router.post("/{planId}/copy", response_model=MenuPlanResponse)
+async def copy_menu_plan(
+    planId: UUID,
+    copy_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Copy an existing menu plan to a new week.
+
+    Args:
+        planId: Source plan ID to copy
+        copy_data: Must contain 'week_start_date' (ISO format)
+
+    Returns:
+        New menu plan with copied meals
+    """
+    week_start_str = copy_data.get("week_start_date")
+    if not week_start_str:
+        raise HTTPException(status_code=400, detail="week_start_date required")
+
+    try:
+        week_start = date.fromisoformat(week_start_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    new_plan = MenuPlanService.copy_menu_plan(db, planId, week_start, current_user.id)
+    if not new_plan:
+        raise HTTPException(status_code=404, detail="Source menu plan not found")
+
+    return new_plan
+
+@router.post("/suggest", response_model=MenuPlanResponse)
+async def suggest_week_plan(
+    week_start: date = Query(..., description="Start date for the week (YYYY-MM-DD)"),
+    strategy: str = Query("rotation", description="Suggestion strategy: rotation, favorites, available_inventory"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Auto-generate a week plan using recipe suggestions.
+
+    Creates a complete week plan with variety (no recipe repeated in same week).
+
+    Args:
+        week_start: Start date for the week
+        strategy: Recipe suggestion strategy to use
+
+    Returns:
+        Generated menu plan with meals
+    """
+    plan = MenuPlanService.suggest_week_plan(db, week_start, current_user.id, strategy)
+    return plan

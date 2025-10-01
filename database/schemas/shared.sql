@@ -121,6 +121,28 @@ INSERT INTO shared.system_settings (key, value, description) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================================
+-- NOTIFICATIONS TABLE
+-- ============================================================================
+CREATE TABLE shared.notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES shared.users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    link VARCHAR(255),
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_notification_type CHECK (type IN ('low_stock', 'expiring', 'meal_reminder', 'recipe_update', 'system'))
+);
+
+-- Indexes for notifications table
+CREATE INDEX idx_notifications_user ON shared.notifications(user_id);
+CREATE INDEX idx_notifications_unread ON shared.notifications(user_id, is_read) WHERE is_read = false;
+CREATE INDEX idx_notifications_created_at ON shared.notifications(created_at DESC);
+CREATE INDEX idx_notifications_type ON shared.notifications(type);
+
+-- ============================================================================
 -- COMMENTS
 -- ============================================================================
 
@@ -129,8 +151,10 @@ COMMENT ON TABLE shared.users IS 'User accounts for all family members';
 COMMENT ON TABLE shared.sessions IS 'Active user sessions for JWT token management';
 COMMENT ON TABLE shared.user_activity_log IS 'Audit trail of user actions';
 COMMENT ON TABLE shared.system_settings IS 'Global system configuration';
+COMMENT ON TABLE shared.notifications IS 'User notifications for alerts and reminders';
 
 COMMENT ON COLUMN shared.users.role IS 'User role: admin, user, or child';
 COMMENT ON COLUMN shared.users.is_active IS 'Whether the user account is active';
 COMMENT ON COLUMN shared.sessions.token_hash IS 'Hashed JWT token for validation';
 COMMENT ON COLUMN shared.system_settings.value IS 'JSON value allows flexible configuration types';
+COMMENT ON COLUMN shared.notifications.type IS 'Notification type: low_stock, expiring, meal_reminder, recipe_update, system';
