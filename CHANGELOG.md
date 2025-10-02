@@ -19,6 +19,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2025-10-01
+
+### Fixed
+- **Critical**: Added `output: 'standalone'` to Next.js configuration to fix Docker build failure
+- Updated SQLAlchemy to use `text()` function for SQL execution (SQLAlchemy 2.0+ compatibility)
+- Migrated FastAPI from deprecated `@app.on_event()` to modern `lifespan` context manager
+
+### Changed
+- Enhanced `ALLOWED_HOSTS` configuration documentation with security guidance
+- Cleaned up `.env.example` removing CrewAI development artifacts
+- Standardized environment variable naming conventions
+- Added comprehensive environment variable documentation
+- Applied code formatting and import organization across 37 backend files (black/isort standards)
+
+### Documentation
+- Updated `.env.example` with all required production variables
+- Added security best practices documentation for production deployment
+- Improved configuration comments and examples
+
+---
+
 ## [1.0.0] - 2025-10-01
 
 ### Added

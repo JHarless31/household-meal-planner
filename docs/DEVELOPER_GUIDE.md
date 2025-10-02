@@ -2806,6 +2806,70 @@ Add comprehensive tests for all 6 suggestion strategies.
 Coverage increased to 85%.
 ```
 
+### Modern FastAPI Patterns
+
+This project follows modern FastAPI best practices and patterns:
+
+**Lifespan Context Manager (Recommended):**
+
+Modern FastAPI uses the `lifespan` context manager instead of deprecated `@app.on_event()` decorators:
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events."""
+    # Startup
+    print("Starting application...")
+    # Initialize database, load resources, etc.
+
+    yield  # Application runs here
+
+    # Shutdown
+    print("Shutting down application...")
+    # Close connections, cleanup resources, etc.
+
+app = FastAPI(lifespan=lifespan)
+```
+
+**SQLAlchemy 2.0 Compatibility:**
+
+Use `text()` for raw SQL execution:
+
+```python
+from sqlalchemy import text
+
+# Correct (SQLAlchemy 2.0+)
+conn.execute(text("SELECT 1"))
+
+# Deprecated (will be removed)
+conn.execute("SELECT 1")
+```
+
+**Import Organization:**
+
+Follow isort/black standards for import organization:
+
+```python
+# Standard library imports (sorted alphabetically)
+import os
+import uuid
+from datetime import datetime
+from typing import List, Optional
+
+# Third-party imports (sorted alphabetically)
+from fastapi import APIRouter, Depends
+from sqlalchemy import Column, String, text
+from sqlalchemy.orm import Session
+
+# Local imports (sorted alphabetically)
+from src.core.config import settings
+from src.core.database import get_db
+from src.models.user import User
+```
+
 ---
 
 ## Debugging
