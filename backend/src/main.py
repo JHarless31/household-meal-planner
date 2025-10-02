@@ -3,6 +3,7 @@ FastAPI Application - Household Meal Planning System
 Main application entry point
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -20,6 +21,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# Lifespan Context Manager
+# ============================================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan context manager.
+    Handles startup and shutdown events.
+    """
+    # Startup
+    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Database: {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
+
+    # Create database tables (in production, use Alembic migrations)
+    if settings.ENVIRONMENT == "development":
+        logger.warning("Creating database tables (development mode)")
+        Base.metadata.create_all(bind=engine)
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down application")
+
 # Create FastAPI application
 app = FastAPI(
     title=settings.APP_NAME,
@@ -28,6 +54,7 @@ app = FastAPI(
     docs_url="/api/docs" if settings.DEBUG else None,
     redoc_url="/api/redoc" if settings.DEBUG else None,
     openapi_url="/api/openapi.json" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
 # ============================================================================
@@ -48,27 +75,6 @@ app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=settings.ALLOWED_HOSTS
 )
-
-# ============================================================================
-# Event Handlers
-# ============================================================================
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize application on startup"""
-    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    logger.info(f"Environment: {settings.ENVIRONMENT}")
-    logger.info(f"Database: {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
-
-    # Create database tables (in production, use Alembic migrations)
-    if settings.ENVIRONMENT == "development":
-        logger.warning("Creating database tables (development mode)")
-        Base.metadata.create_all(bind=engine)
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on application shutdown"""
-    logger.info("Shutting down application")
 
 # ============================================================================
 # API Routes

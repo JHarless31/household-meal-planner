@@ -3,14 +3,15 @@ Unit Tests for Inventory Service
 Tests inventory CRUD operations, history tracking, and auto-deduction
 """
 
-import pytest
 from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-from src.services.inventory_service import InventoryService
+import pytest
+
+from src.models.inventory import InventoryHistory, InventoryItem
 from src.schemas.inventory import InventoryItemCreate, InventoryItemUpdate
-from src.models.inventory import InventoryItem, InventoryHistory
+from src.services.inventory_service import InventoryService
 
 
 @pytest.mark.unit
@@ -26,7 +27,7 @@ class TestInventoryService:
             category="fruit",
             location="fridge",
             minimum_stock=Decimal("5"),
-            expiration_date=date.today() + timedelta(days=7)
+            expiration_date=date.today() + timedelta(days=7),
         )
 
         item = InventoryService.create_item(db, item_data, test_user.id)
@@ -36,9 +37,11 @@ class TestInventoryService:
         assert item.quantity == Decimal("10")
 
         # Check history was created
-        history = db.query(InventoryHistory).filter(
-            InventoryHistory.inventory_id == item.id
-        ).first()
+        history = (
+            db.query(InventoryHistory)
+            .filter(InventoryHistory.inventory_id == item.id)
+            .first()
+        )
         assert history is not None
         assert history.change_type == "purchased"
         assert history.quantity_after == Decimal("10")
@@ -91,10 +94,7 @@ class TestInventoryService:
 
     def test_update_item_success(self, db, test_inventory_item, test_user):
         """Test successful item update"""
-        item_data = InventoryItemUpdate(
-            quantity=Decimal("15"),
-            location="pantry"
-        )
+        item_data = InventoryItemUpdate(quantity=Decimal("15"), location="pantry")
 
         updated = InventoryService.update_item(
             db, test_inventory_item.id, item_data, test_user.id
@@ -105,23 +105,33 @@ class TestInventoryService:
         assert updated.location == "pantry"
 
         # Check history was tracked
-        histories = db.query(InventoryHistory).filter(
-            InventoryHistory.inventory_id == test_inventory_item.id
-        ).all()
+        histories = (
+            db.query(InventoryHistory)
+            .filter(InventoryHistory.inventory_id == test_inventory_item.id)
+            .all()
+        )
         assert len(histories) == 2  # Initial + update
 
-    def test_update_item_quantity_tracks_history(self, db, test_inventory_item, test_user):
+    def test_update_item_quantity_tracks_history(
+        self, db, test_inventory_item, test_user
+    ):
         """Test that quantity changes are tracked in history"""
         old_quantity = test_inventory_item.quantity
 
         item_data = InventoryItemUpdate(quantity=Decimal("5"))
 
-        InventoryService.update_item(db, test_inventory_item.id, item_data, test_user.id)
+        InventoryService.update_item(
+            db, test_inventory_item.id, item_data, test_user.id
+        )
 
-        histories = db.query(InventoryHistory).filter(
-            InventoryHistory.inventory_id == test_inventory_item.id,
-            InventoryHistory.change_type == "adjusted"
-        ).all()
+        histories = (
+            db.query(InventoryHistory)
+            .filter(
+                InventoryHistory.inventory_id == test_inventory_item.id,
+                InventoryHistory.change_type == "adjusted",
+            )
+            .all()
+        )
 
         assert len(histories) == 1
         assert histories[0].quantity_before == old_quantity
@@ -142,9 +152,11 @@ class TestInventoryService:
         assert result is True
 
         # Item should be deleted
-        item = db.query(InventoryItem).filter(
-            InventoryItem.id == test_inventory_item.id
-        ).first()
+        item = (
+            db.query(InventoryItem)
+            .filter(InventoryItem.id == test_inventory_item.id)
+            .first()
+        )
         assert item is None
 
     def test_delete_item_not_found(self, db):
@@ -196,7 +208,9 @@ class TestInventoryService:
         # Make some changes
         for i in range(3):
             item_data = InventoryItemUpdate(quantity=Decimal(str(10 + i)))
-            InventoryService.update_item(db, test_inventory_item.id, item_data, test_user.id)
+            InventoryService.update_item(
+                db, test_inventory_item.id, item_data, test_user.id
+            )
 
         history = InventoryService.get_item_history(db, test_inventory_item.id)
 
@@ -208,45 +222,47 @@ class TestInventoryService:
         old_quantity = test_inventory_item.quantity
 
         result = InventoryService.deduct_quantity(
-            db,
-            test_inventory_item.id,
-            Decimal("3"),
-            "Used for cooking",
-            test_user.id
+            db, test_inventory_item.id, Decimal("3"), "Used for cooking", test_user.id
         )
 
         assert result is True
 
         # Check quantity updated
-        item = db.query(InventoryItem).filter(
-            InventoryItem.id == test_inventory_item.id
-        ).first()
+        item = (
+            db.query(InventoryItem)
+            .filter(InventoryItem.id == test_inventory_item.id)
+            .first()
+        )
         assert item.quantity == old_quantity - Decimal("3")
 
         # Check history logged
-        history = db.query(InventoryHistory).filter(
-            InventoryHistory.inventory_id == test_inventory_item.id,
-            InventoryHistory.change_type == "auto_deducted"
-        ).first()
+        history = (
+            db.query(InventoryHistory)
+            .filter(
+                InventoryHistory.inventory_id == test_inventory_item.id,
+                InventoryHistory.change_type == "auto_deducted",
+            )
+            .first()
+        )
         assert history is not None
         assert history.reason == "Used for cooking"
 
-    def test_deduct_quantity_prevents_negative(self, db, test_inventory_item, test_user):
+    def test_deduct_quantity_prevents_negative(
+        self, db, test_inventory_item, test_user
+    ):
         """Test that deduction doesn't go below zero"""
         # Try to deduct more than available
         result = InventoryService.deduct_quantity(
-            db,
-            test_inventory_item.id,
-            Decimal("999"),
-            "Test",
-            test_user.id
+            db, test_inventory_item.id, Decimal("999"), "Test", test_user.id
         )
 
         assert result is True
 
-        item = db.query(InventoryItem).filter(
-            InventoryItem.id == test_inventory_item.id
-        ).first()
+        item = (
+            db.query(InventoryItem)
+            .filter(InventoryItem.id == test_inventory_item.id)
+            .first()
+        )
         assert item.quantity == Decimal("0")
 
     def test_deduct_quantity_item_not_found(self, db, test_user):
@@ -259,9 +275,7 @@ class TestInventoryService:
 
     def test_find_or_create_item_existing(self, db, test_inventory_item):
         """Test finding existing item"""
-        item = InventoryService.find_or_create_item(
-            db, test_inventory_item.item_name
-        )
+        item = InventoryService.find_or_create_item(db, test_inventory_item.item_name)
 
         assert item.id == test_inventory_item.id
 

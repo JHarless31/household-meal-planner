@@ -3,25 +3,26 @@ Pytest Configuration and Fixtures
 Comprehensive test fixtures for all models and services
 """
 
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+
 import pytest
+from faker import Faker
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from datetime import date, datetime, timedelta
-from decimal import Decimal
-from faker import Faker
 
-from src.main import app
 from src.core.database import Base, get_db
-from src.models.user import User
-from src.models.recipe import Recipe, RecipeVersion, Ingredient, RecipeTag
-from src.models.inventory import InventoryItem, InventoryHistory
-from src.models.rating import Rating
+from src.core.security import SecurityManager
+from src.main import app
+from src.models.app_settings import AppSettings
+from src.models.inventory import InventoryHistory, InventoryItem
 from src.models.menu_plan import MenuPlan, PlannedMeal
 from src.models.notification import Notification
-from src.models.app_settings import AppSettings
-from src.core.security import SecurityManager
+from src.models.rating import Rating
+from src.models.recipe import Ingredient, Recipe, RecipeTag, RecipeVersion
+from src.models.user import User
 
 fake = Faker()
 
@@ -48,7 +49,7 @@ def db():
         favorites_threshold=0.75,
         favorites_min_raters=3,
         expiration_warning_days=7,
-        low_stock_threshold=0.2
+        low_stock_threshold=0.2,
     )
     session.add(settings)
     session.commit()
@@ -63,6 +64,7 @@ def db():
 @pytest.fixture(scope="function")
 def client(db):
     """Create test client"""
+
     def override_get_db():
         try:
             yield db
@@ -77,6 +79,7 @@ def client(db):
 
 # ===== User Fixtures =====
 
+
 @pytest.fixture
 def test_user(db):
     """Create test user"""
@@ -85,7 +88,7 @@ def test_user(db):
         email="test@example.com",
         password_hash=SecurityManager.hash_password("testpassword123"),
         role="user",
-        is_active=True
+        is_active=True,
     )
     db.add(user)
     db.commit()
@@ -101,7 +104,7 @@ def admin_user(db):
         email="admin@example.com",
         password_hash=SecurityManager.hash_password("adminpassword123"),
         role="admin",
-        is_active=True
+        is_active=True,
     )
     db.add(user)
     db.commit()
@@ -117,7 +120,7 @@ def inactive_user(db):
         email="inactive@example.com",
         password_hash=SecurityManager.hash_password("password123"),
         role="user",
-        is_active=False
+        is_active=False,
     )
     db.add(user)
     db.commit()
@@ -128,10 +131,9 @@ def inactive_user(db):
 @pytest.fixture
 def auth_headers(client, test_user):
     """Get authentication headers"""
-    response = client.post("/api/auth/login", json={
-        "username": "testuser",
-        "password": "testpassword123"
-    })
+    response = client.post(
+        "/api/auth/login", json={"username": "testuser", "password": "testpassword123"}
+    )
     assert response.status_code == 200
     return {"Cookie": response.cookies.get("session")}
 
@@ -139,15 +141,15 @@ def auth_headers(client, test_user):
 @pytest.fixture
 def admin_headers(client, admin_user):
     """Get admin authentication headers"""
-    response = client.post("/api/auth/login", json={
-        "username": "admin",
-        "password": "adminpassword123"
-    })
+    response = client.post(
+        "/api/auth/login", json={"username": "admin", "password": "adminpassword123"}
+    )
     assert response.status_code == 200
     return {"Cookie": response.cookies.get("session")}
 
 
 # ===== Recipe Fixtures =====
+
 
 @pytest.fixture
 def test_recipe(db, test_user):
@@ -157,7 +159,7 @@ def test_recipe(db, test_user):
         description="A delicious test recipe",
         created_by=test_user.id,
         current_version=1,
-        source_type="manual"
+        source_type="manual",
     )
     db.add(recipe)
     db.flush()
@@ -171,7 +173,7 @@ def test_recipe(db, test_user):
         servings=4,
         difficulty="medium",
         instructions="1. Prepare ingredients\n2. Cook\n3. Serve",
-        modified_by=test_user.id
+        modified_by=test_user.id,
     )
     db.add(version)
     db.flush()
@@ -184,7 +186,7 @@ def test_recipe(db, test_user):
             quantity=500,
             unit="g",
             category="meat",
-            display_order=0
+            display_order=0,
         ),
         Ingredient(
             recipe_version_id=version.id,
@@ -192,7 +194,7 @@ def test_recipe(db, test_user):
             quantity=200,
             unit="g",
             category="grain",
-            display_order=1
+            display_order=1,
         ),
         Ingredient(
             recipe_version_id=version.id,
@@ -200,15 +202,15 @@ def test_recipe(db, test_user):
             quantity=300,
             unit="g",
             category="vegetable",
-            display_order=2
-        )
+            display_order=2,
+        ),
     ]
     db.add_all(ingredients)
 
     # Add tags
     tags = [
         RecipeTag(recipe_id=recipe.id, tag="dinner"),
-        RecipeTag(recipe_id=recipe.id, tag="easy")
+        RecipeTag(recipe_id=recipe.id, tag="easy"),
     ]
     db.add_all(tags)
 
@@ -227,7 +229,7 @@ def test_recipes(db, test_user):
         ("Beef Stew", "Hearty stew", "hard", 30, 120, 6),
         ("Quick Salad", "Fresh salad", "easy", 10, 0, 2),
         ("Roast Chicken", "Sunday roast", "medium", 20, 60, 4),
-        ("Vegetable Curry", "Spicy curry", "medium", 15, 25, 4)
+        ("Vegetable Curry", "Spicy curry", "medium", 15, 25, 4),
     ]
 
     for title, desc, difficulty, prep, cook, servings in recipe_data:
@@ -236,7 +238,7 @@ def test_recipes(db, test_user):
             description=desc,
             created_by=test_user.id,
             current_version=1,
-            source_type="manual"
+            source_type="manual",
         )
         db.add(recipe)
         db.flush()
@@ -249,7 +251,7 @@ def test_recipes(db, test_user):
             servings=servings,
             difficulty=difficulty,
             instructions=f"Instructions for {title}",
-            modified_by=test_user.id
+            modified_by=test_user.id,
         )
         db.add(version)
         db.flush()
@@ -261,7 +263,7 @@ def test_recipes(db, test_user):
             quantity=100,
             unit="g",
             category="other",
-            display_order=0
+            display_order=0,
         )
         db.add(ing)
 
@@ -276,6 +278,7 @@ def test_recipes(db, test_user):
 
 # ===== Inventory Fixtures =====
 
+
 @pytest.fixture
 def test_inventory_item(db, test_user):
     """Create a test inventory item"""
@@ -286,7 +289,7 @@ def test_inventory_item(db, test_user):
         category="vegetable",
         location="fridge",
         minimum_stock=Decimal("5"),
-        expiration_date=date.today() + timedelta(days=5)
+        expiration_date=date.today() + timedelta(days=5),
     )
     db.add(item)
     db.flush()
@@ -298,7 +301,7 @@ def test_inventory_item(db, test_user):
         quantity_before=Decimal("0"),
         quantity_after=Decimal("10"),
         reason="Initial stock",
-        changed_by=test_user.id
+        changed_by=test_user.id,
     )
     db.add(history)
 
@@ -317,7 +320,7 @@ def test_inventory_items(db, test_user):
         ("Eggs", 12, "pcs", "dairy", "fridge", 6, 7),
         ("Flour", 1000, "g", "grain", "pantry", 500, None),
         ("Chicken Breast", 500, "g", "meat", "freezer", 200, 14),
-        ("Olive Oil", 500, "ml", "oil", "pantry", 100, None)
+        ("Olive Oil", 500, "ml", "oil", "pantry", 100, None),
     ]
 
     for name, qty, unit, cat, loc, min_stock, exp_days in item_data:
@@ -328,7 +331,9 @@ def test_inventory_items(db, test_user):
             category=cat,
             location=loc,
             minimum_stock=Decimal(str(min_stock)),
-            expiration_date=date.today() + timedelta(days=exp_days) if exp_days else None
+            expiration_date=(
+                date.today() + timedelta(days=exp_days) if exp_days else None
+            ),
         )
         db.add(item)
         items.append(item)
@@ -342,6 +347,7 @@ def test_inventory_items(db, test_user):
 
 # ===== Rating Fixtures =====
 
+
 @pytest.fixture
 def test_rating(db, test_recipe, test_user):
     """Create a test rating"""
@@ -349,7 +355,7 @@ def test_rating(db, test_recipe, test_user):
         recipe_id=test_recipe.id,
         user_id=test_user.id,
         rating=True,
-        feedback="Great recipe!"
+        feedback="Great recipe!",
     )
     db.add(rating)
     db.commit()
@@ -359,6 +365,7 @@ def test_rating(db, test_recipe, test_user):
 
 # ===== Menu Plan Fixtures =====
 
+
 @pytest.fixture
 def test_menu_plan(db, test_user):
     """Create a test menu plan"""
@@ -366,7 +373,7 @@ def test_menu_plan(db, test_user):
         week_start_date=date.today(),
         name="This Week's Menu",
         created_by=test_user.id,
-        is_active=True
+        is_active=True,
     )
     db.add(plan)
     db.commit()
@@ -383,7 +390,7 @@ def test_planned_meal(db, test_menu_plan, test_recipe):
         meal_date=date.today(),
         meal_type="dinner",
         servings_planned=4,
-        cooked=False
+        cooked=False,
     )
     db.add(meal)
     db.commit()
@@ -392,6 +399,7 @@ def test_planned_meal(db, test_menu_plan, test_recipe):
 
 
 # ===== Notification Fixtures =====
+
 
 @pytest.fixture
 def test_notification(db, test_user):
@@ -402,7 +410,7 @@ def test_notification(db, test_user):
         title="Low Stock Alert",
         message="Milk is running low",
         link="/inventory",
-        is_read=False
+        is_read=False,
     )
     db.add(notification)
     db.commit()
@@ -412,9 +420,11 @@ def test_notification(db, test_user):
 
 # ===== Mock Fixtures =====
 
+
 @pytest.fixture
 def mock_time(monkeypatch):
     """Mock datetime.now() for consistent testing"""
+
     class MockDatetime:
         @classmethod
         def now(cls):

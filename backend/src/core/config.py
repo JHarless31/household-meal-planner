@@ -43,7 +43,10 @@ class Settings(BaseSettings):
     ]
 
     # Trusted Hosts
-    ALLOWED_HOSTS: List[str] = ["*"]  # In production, specify actual hosts
+    # Production: Set to specific hostnames/IPs for security
+    # Development: Can use ["*"] for convenience
+    # Example: ["meal-planner.local", "192.168.1.100", "localhost"]
+    ALLOWED_HOSTS: List[str] = ["*"]
 
     # Recipe Scraping
     SCRAPER_USER_AGENT: str = "HouseholdMealPlanner/1.0 (+http://meal-planner.local/about)"

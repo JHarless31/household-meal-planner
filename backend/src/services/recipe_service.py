@@ -3,21 +3,22 @@ Recipe Service
 Business logic for recipe operations including versioning
 """
 
-from typing import List, Optional, Dict, Any, Tuple
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
-from datetime import datetime, timedelta, date
-from uuid import UUID
 import logging
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
 
-from src.models.recipe import Recipe, RecipeVersion, Ingredient, RecipeTag, RecipeImage
-from src.models.rating import Rating
-from src.models.inventory import InventoryItem
+from sqlalchemy import and_, func, or_
+from sqlalchemy.orm import Session
+
 from src.models.app_settings import AppSettings
-from src.schemas.recipe import (
-    RecipeCreate, RecipeUpdate, RecipeSummary, RecipeResponse,
-    IngredientInput, IngredientResponse, RecipeVersionResponse
-)
+from src.models.inventory import InventoryItem
+from src.models.rating import Rating
+from src.models.recipe import (Ingredient, Recipe, RecipeImage, RecipeTag,
+                               RecipeVersion)
+from src.schemas.recipe import (IngredientInput, IngredientResponse,
+                                RecipeCreate, RecipeResponse, RecipeSummary,
+                                RecipeUpdate, RecipeVersionResponse)
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +27,7 @@ class RecipeService:
     """Service for recipe management"""
 
     @staticmethod
-    def create_recipe(
-        db: Session,
-        recipe_data: RecipeCreate,
-        user_id: UUID
-    ) -> Recipe:
+    def create_recipe(db: Session, recipe_data: RecipeCreate, user_id: UUID) -> Recipe:
         """
         Create a new recipe with version 1.
 
@@ -49,7 +46,7 @@ class RecipeService:
             source_url=recipe_data.source_url,
             source_type="scraped" if recipe_data.source_url else "manual",
             created_by=user_id,
-            current_version=1
+            current_version=1,
         )
         db.add(recipe)
         db.flush()
@@ -63,7 +60,7 @@ class RecipeService:
             servings=recipe_data.servings,
             difficulty=recipe_data.difficulty,
             instructions=recipe_data.instructions,
-            modified_by=user_id
+            modified_by=user_id,
         )
         db.add(version)
         db.flush()
@@ -77,7 +74,7 @@ class RecipeService:
                 unit=ing_data.unit,
                 category=ing_data.category,
                 is_optional=ing_data.is_optional or False,
-                display_order=idx
+                display_order=idx,
             )
             db.add(ingredient)
 
@@ -92,7 +89,9 @@ class RecipeService:
         return recipe
 
     @staticmethod
-    def get_recipe(db: Session, recipe_id: UUID, version: Optional[int] = None) -> Optional[Recipe]:
+    def get_recipe(
+        db: Session, recipe_id: UUID, version: Optional[int] = None
+    ) -> Optional[Recipe]:
         """
         Get recipe by ID, optionally at specific version.
 
@@ -104,20 +103,25 @@ class RecipeService:
         Returns:
             Optional[Recipe]: Recipe or None if not found
         """
-        recipe = db.query(Recipe).filter(
-            Recipe.id == recipe_id,
-            Recipe.is_deleted == False
-        ).first()
+        recipe = (
+            db.query(Recipe)
+            .filter(Recipe.id == recipe_id, Recipe.is_deleted == False)
+            .first()
+        )
 
         if not recipe:
             return None
 
         # If version specified, load that version's data
         if version is not None:
-            recipe_version = db.query(RecipeVersion).filter(
-                RecipeVersion.recipe_id == recipe_id,
-                RecipeVersion.version_number == version
-            ).first()
+            recipe_version = (
+                db.query(RecipeVersion)
+                .filter(
+                    RecipeVersion.recipe_id == recipe_id,
+                    RecipeVersion.version_number == version,
+                )
+                .first()
+            )
 
             if not recipe_version:
                 return None
@@ -133,7 +137,7 @@ class RecipeService:
         search: Optional[str] = None,
         tags: Optional[List[str]] = None,
         difficulty: Optional[str] = None,
-        filter_type: Optional[str] = None
+        filter_type: Optional[str] = None,
     ) -> Tuple[List[Recipe], int]:
         """
         List recipes with filters and pagination.
@@ -157,8 +161,8 @@ class RecipeService:
         if search:
             query = query.filter(
                 or_(
-                    Recipe.title.ilike(f'%{search}%'),
-                    Recipe.description.ilike(f'%{search}%')
+                    Recipe.title.ilike(f"%{search}%"),
+                    Recipe.description.ilike(f"%{search}%"),
                 )
             )
 
@@ -171,7 +175,7 @@ class RecipeService:
         if difficulty:
             query = query.join(RecipeVersion).filter(
                 RecipeVersion.version_number == Recipe.current_version,
-                RecipeVersion.difficulty == difficulty
+                RecipeVersion.difficulty == difficulty,
             )
 
         # Special filters
@@ -182,16 +186,19 @@ class RecipeService:
             min_raters = settings.favorites_min_raters if settings else 3
 
             # Subquery for favorites
-            favorites_subq = db.query(
-                Rating.recipe_id
-            ).group_by(
-                Rating.recipe_id
-            ).having(
-                and_(
-                    func.count(Rating.id) >= min_raters,
-                    func.sum(func.cast(Rating.rating, db.dialect.Integer)) / func.count(Rating.id) >= threshold
+            favorites_subq = (
+                db.query(Rating.recipe_id)
+                .group_by(Rating.recipe_id)
+                .having(
+                    and_(
+                        func.count(Rating.id) >= min_raters,
+                        func.sum(func.cast(Rating.rating, db.dialect.Integer))
+                        / func.count(Rating.id)
+                        >= threshold,
+                    )
                 )
-            ).subquery()
+                .subquery()
+            )
 
             query = query.filter(Recipe.id.in_(favorites_subq))
 
@@ -204,7 +211,7 @@ class RecipeService:
             query = query.filter(
                 or_(
                     Recipe.last_cooked_date == None,
-                    Recipe.last_cooked_date <= cutoff_date
+                    Recipe.last_cooked_date <= cutoff_date,
                 )
             )
 
@@ -228,10 +235,7 @@ class RecipeService:
 
     @staticmethod
     def update_recipe(
-        db: Session,
-        recipe_id: UUID,
-        recipe_data: RecipeUpdate,
-        user_id: UUID
+        db: Session, recipe_id: UUID, recipe_data: RecipeUpdate, user_id: UUID
     ) -> Optional[Recipe]:
         """
         Update recipe by creating a new version.
@@ -245,10 +249,11 @@ class RecipeService:
         Returns:
             Optional[Recipe]: Updated recipe or None if not found
         """
-        recipe = db.query(Recipe).filter(
-            Recipe.id == recipe_id,
-            Recipe.is_deleted == False
-        ).first()
+        recipe = (
+            db.query(Recipe)
+            .filter(Recipe.id == recipe_id, Recipe.is_deleted == False)
+            .first()
+        )
 
         if not recipe:
             return None
@@ -265,7 +270,7 @@ class RecipeService:
             difficulty=recipe_data.difficulty,
             instructions=recipe_data.instructions,
             change_description=recipe_data.change_description,
-            modified_by=user_id
+            modified_by=user_id,
         )
         db.add(version)
         db.flush()
@@ -279,7 +284,7 @@ class RecipeService:
                 unit=ing_data.unit,
                 category=ing_data.category,
                 is_optional=ing_data.is_optional or False,
-                display_order=idx
+                display_order=idx,
             )
             db.add(ingredient)
 
@@ -331,16 +336,16 @@ class RecipeService:
         Returns:
             List[RecipeVersion]: List of versions
         """
-        return db.query(RecipeVersion).filter(
-            RecipeVersion.recipe_id == recipe_id
-        ).order_by(RecipeVersion.version_number.desc()).all()
+        return (
+            db.query(RecipeVersion)
+            .filter(RecipeVersion.recipe_id == recipe_id)
+            .order_by(RecipeVersion.version_number.desc())
+            .all()
+        )
 
     @staticmethod
     def revert_recipe(
-        db: Session,
-        recipe_id: UUID,
-        version_number: int,
-        user_id: UUID
+        db: Session, recipe_id: UUID, version_number: int, user_id: UUID
     ) -> Optional[Recipe]:
         """
         Revert recipe to a previous version (creates new version as copy).
@@ -354,27 +359,35 @@ class RecipeService:
         Returns:
             Optional[Recipe]: Reverted recipe or None if not found
         """
-        recipe = db.query(Recipe).filter(
-            Recipe.id == recipe_id,
-            Recipe.is_deleted == False
-        ).first()
+        recipe = (
+            db.query(Recipe)
+            .filter(Recipe.id == recipe_id, Recipe.is_deleted == False)
+            .first()
+        )
 
         if not recipe:
             return None
 
         # Get target version
-        target_version = db.query(RecipeVersion).filter(
-            RecipeVersion.recipe_id == recipe_id,
-            RecipeVersion.version_number == version_number
-        ).first()
+        target_version = (
+            db.query(RecipeVersion)
+            .filter(
+                RecipeVersion.recipe_id == recipe_id,
+                RecipeVersion.version_number == version_number,
+            )
+            .first()
+        )
 
         if not target_version:
             return None
 
         # Get ingredients from target version
-        target_ingredients = db.query(Ingredient).filter(
-            Ingredient.recipe_version_id == target_version.id
-        ).order_by(Ingredient.display_order).all()
+        target_ingredients = (
+            db.query(Ingredient)
+            .filter(Ingredient.recipe_version_id == target_version.id)
+            .order_by(Ingredient.display_order)
+            .all()
+        )
 
         # Create new version as copy of target
         new_version_number = recipe.current_version + 1
@@ -388,7 +401,7 @@ class RecipeService:
             difficulty=target_version.difficulty,
             instructions=target_version.instructions,
             change_description=f"Reverted to version {version_number}",
-            modified_by=user_id
+            modified_by=user_id,
         )
         db.add(new_version)
         db.flush()
@@ -402,7 +415,7 @@ class RecipeService:
                 unit=ing.unit,
                 category=ing.category,
                 is_optional=ing.is_optional,
-                display_order=ing.display_order
+                display_order=ing.display_order,
             )
             db.add(new_ingredient)
 
@@ -415,9 +428,7 @@ class RecipeService:
 
     @staticmethod
     def get_recipe_suggestions(
-        db: Session,
-        user_id: UUID,
-        limit: int = 10
+        db: Session, user_id: UUID, limit: int = 10
     ) -> List[Tuple[Recipe, int, List[str]]]:
         """
         Get recipe suggestions based on inventory, favorites, and rotation.

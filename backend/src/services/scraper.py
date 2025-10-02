@@ -3,16 +3,17 @@ Recipe Scraper Service
 Ethical web scraping for recipes with robots.txt compliance and rate limiting
 """
 
+import logging
 import time
 import urllib.robotparser
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
+
 import requests
 from bs4 import BeautifulSoup
-import logging
 
 from src.core.config import settings
-from src.schemas.recipe import RecipeCreate, IngredientInput
+from src.schemas.recipe import IngredientInput, RecipeCreate
 
 logger = logging.getLogger(__name__)
 
@@ -114,18 +115,18 @@ class RecipeScraper:
             self.rate_limiter.wait_if_needed(domain)
 
             headers = {
-                'User-Agent': settings.SCRAPER_USER_AGENT,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
+                "User-Agent": settings.SCRAPER_USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
             }
 
             response = requests.get(
                 url,
                 headers=headers,
                 timeout=settings.SCRAPER_TIMEOUT,
-                allow_redirects=True
+                allow_redirects=True,
             )
 
             if response.status_code == 200:
@@ -155,15 +156,18 @@ class RecipeScraper:
             import json
 
             # Find JSON-LD script tags
-            scripts = soup.find_all('script', type='application/ld+json')
+            scripts = soup.find_all("script", type="application/ld+json")
             for script in scripts:
                 try:
                     data = json.loads(script.string)
 
                     # Handle single recipe or array
                     if isinstance(data, list):
-                        data = next((item for item in data if item.get('@type') == 'Recipe'), None)
-                    elif data.get('@type') != 'Recipe':
+                        data = next(
+                            (item for item in data if item.get("@type") == "Recipe"),
+                            None,
+                        )
+                    elif data.get("@type") != "Recipe":
                         continue
 
                     if not data:
@@ -171,16 +175,24 @@ class RecipeScraper:
 
                     # Extract recipe data
                     recipe_data = {
-                        'title': data.get('name', ''),
-                        'description': data.get('description', ''),
-                        'prep_time_minutes': self._parse_duration(data.get('prepTime')),
-                        'cook_time_minutes': self._parse_duration(data.get('cookTime')),
-                        'servings': self._parse_servings(data.get('recipeYield')),
-                        'ingredients': self._parse_ingredients(data.get('recipeIngredient', [])),
-                        'instructions': self._parse_instructions(data.get('recipeInstructions', [])),
+                        "title": data.get("name", ""),
+                        "description": data.get("description", ""),
+                        "prep_time_minutes": self._parse_duration(data.get("prepTime")),
+                        "cook_time_minutes": self._parse_duration(data.get("cookTime")),
+                        "servings": self._parse_servings(data.get("recipeYield")),
+                        "ingredients": self._parse_ingredients(
+                            data.get("recipeIngredient", [])
+                        ),
+                        "instructions": self._parse_instructions(
+                            data.get("recipeInstructions", [])
+                        ),
                     }
 
-                    if recipe_data['title'] and recipe_data['ingredients'] and recipe_data['instructions']:
+                    if (
+                        recipe_data["title"]
+                        and recipe_data["ingredients"]
+                        and recipe_data["instructions"]
+                    ):
                         return recipe_data
 
                 except json.JSONDecodeError:
@@ -198,8 +210,9 @@ class RecipeScraper:
 
         try:
             import re
+
             # Simple parser for PT30M or PT1H30M format
-            match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?', duration)
+            match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?", duration)
             if match:
                 hours = int(match.group(1) or 0)
                 minutes = int(match.group(2) or 0)
@@ -215,7 +228,8 @@ class RecipeScraper:
             return servings
         elif isinstance(servings, str):
             import re
-            match = re.search(r'\d+', servings)
+
+            match = re.search(r"\d+", servings)
             if match:
                 return int(match.group())
         elif isinstance(servings, list) and servings:
@@ -227,11 +241,9 @@ class RecipeScraper:
         result = []
         for idx, ing in enumerate(ingredients):
             if isinstance(ing, str):
-                result.append(IngredientInput(
-                    name=ing.strip(),
-                    quantity=None,
-                    unit=None
-                ))
+                result.append(
+                    IngredientInput(name=ing.strip(), quantity=None, unit=None)
+                )
         return result
 
     def _parse_instructions(self, instructions) -> str:
@@ -244,10 +256,10 @@ class RecipeScraper:
                 if isinstance(inst, str):
                     steps.append(f"{idx}. {inst.strip()}")
                 elif isinstance(inst, dict):
-                    text = inst.get('text', inst.get('itemListElement', ''))
+                    text = inst.get("text", inst.get("itemListElement", ""))
                     if text:
                         steps.append(f"{idx}. {text.strip()}")
-            return '\n'.join(steps)
+            return "\n".join(steps)
         return ""
 
     def _try_recipe_scrapers_library(self, url: str) -> Optional[Dict]:
@@ -267,42 +279,44 @@ class RecipeScraper:
 
             # Extract data using recipe-scrapers API
             recipe_data = {
-                'title': scraper.title() or '',
-                'description': scraper.description() or '',
-                'prep_time_minutes': scraper.prep_time() or None,
-                'cook_time_minutes': scraper.cook_time() or None,
-                'servings': scraper.yields() or None,
-                'ingredients': [],
-                'instructions': ''
+                "title": scraper.title() or "",
+                "description": scraper.description() or "",
+                "prep_time_minutes": scraper.prep_time() or None,
+                "cook_time_minutes": scraper.cook_time() or None,
+                "servings": scraper.yields() or None,
+                "ingredients": [],
+                "instructions": "",
             }
 
             # Parse ingredients
             ingredients_list = scraper.ingredients() or []
             for ing in ingredients_list:
-                recipe_data['ingredients'].append(IngredientInput(
-                    name=ing.strip(),
-                    quantity=None,
-                    unit=None
-                ))
+                recipe_data["ingredients"].append(
+                    IngredientInput(name=ing.strip(), quantity=None, unit=None)
+                )
 
             # Parse instructions
             instructions_list = scraper.instructions_list() or []
             if instructions_list:
-                recipe_data['instructions'] = '\n'.join([f"{i+1}. {inst}" for i, inst in enumerate(instructions_list)])
+                recipe_data["instructions"] = "\n".join(
+                    [f"{i+1}. {inst}" for i, inst in enumerate(instructions_list)]
+                )
             else:
-                recipe_data['instructions'] = scraper.instructions() or ''
+                recipe_data["instructions"] = scraper.instructions() or ""
 
             # Parse servings if it's a string
-            if isinstance(recipe_data['servings'], str):
-                recipe_data['servings'] = self._parse_servings(recipe_data['servings'])
+            if isinstance(recipe_data["servings"], str):
+                recipe_data["servings"] = self._parse_servings(recipe_data["servings"])
 
-            return recipe_data if recipe_data['title'] else None
+            return recipe_data if recipe_data["title"] else None
 
         except Exception as e:
             logger.info(f"recipe-scrapers library failed: {e}")
             return None
 
-    def scrape_recipe(self, url: str) -> Tuple[Optional[RecipeCreate], List[str], Optional[str]]:
+    def scrape_recipe(
+        self, url: str
+    ) -> Tuple[Optional[RecipeCreate], List[str], Optional[str]]:
         """
         Scrape recipe from URL.
 
@@ -328,41 +342,47 @@ class RecipeScraper:
             return None, warnings, "No content received"
 
         # Parse HTML
-        soup = BeautifulSoup(content, 'html.parser')
+        soup = BeautifulSoup(content, "html.parser")
 
         # Try JSON-LD first (most reliable)
         recipe_data = self._parse_recipe_json_ld(soup)
 
         # If JSON-LD failed, try recipe-scrapers library
         if not recipe_data:
-            warnings.append("JSON-LD structured data not found, trying recipe-scrapers library")
+            warnings.append(
+                "JSON-LD structured data not found, trying recipe-scrapers library"
+            )
             recipe_data = self._try_recipe_scrapers_library(url)
 
         if not recipe_data:
             warnings.append("Could not extract recipe data with any method")
-            return None, warnings, "Recipe data not found. The site may not be supported."
+            return (
+                None,
+                warnings,
+                "Recipe data not found. The site may not be supported.",
+            )
 
         # Validate required fields
-        if not recipe_data.get('title'):
+        if not recipe_data.get("title"):
             warnings.append("Recipe title not found")
-        if not recipe_data.get('ingredients'):
+        if not recipe_data.get("ingredients"):
             warnings.append("No ingredients found")
-        if not recipe_data.get('instructions'):
+        if not recipe_data.get("instructions"):
             warnings.append("No instructions found")
 
         # Create RecipeCreate schema
         try:
             recipe = RecipeCreate(
-                title=recipe_data['title'],
-                description=recipe_data.get('description', ''),
-                prep_time_minutes=recipe_data.get('prep_time_minutes'),
-                cook_time_minutes=recipe_data.get('cook_time_minutes'),
-                servings=recipe_data.get('servings'),
+                title=recipe_data["title"],
+                description=recipe_data.get("description", ""),
+                prep_time_minutes=recipe_data.get("prep_time_minutes"),
+                cook_time_minutes=recipe_data.get("cook_time_minutes"),
+                servings=recipe_data.get("servings"),
                 difficulty=None,  # Not usually in scraped data
-                ingredients=recipe_data['ingredients'],
-                instructions=recipe_data['instructions'],
+                ingredients=recipe_data["ingredients"],
+                instructions=recipe_data["instructions"],
                 tags=[],
-                source_url=url
+                source_url=url,
             )
 
             return recipe, warnings, None

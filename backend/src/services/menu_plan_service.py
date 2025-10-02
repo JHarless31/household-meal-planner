@@ -3,17 +3,19 @@ Menu Plan Service
 Business logic for weekly menu planning and meal tracking
 """
 
-from typing import List, Optional, Tuple, Dict
-from sqlalchemy.orm import Session
-from datetime import datetime, date, timedelta
-from uuid import UUID
-from decimal import Decimal
 import logging
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from typing import Dict, List, Optional, Tuple
+from uuid import UUID
 
-from src.models.menu_plan import MenuPlan, PlannedMeal
-from src.models.recipe import Recipe, RecipeVersion, Ingredient
+from sqlalchemy.orm import Session
+
 from src.models.inventory import InventoryItem
-from src.schemas.menu_plan import MenuPlanCreate, MenuPlanUpdate, PlannedMealInput
+from src.models.menu_plan import MenuPlan, PlannedMeal
+from src.models.recipe import Ingredient, Recipe, RecipeVersion
+from src.schemas.menu_plan import (MenuPlanCreate, MenuPlanUpdate,
+                                   PlannedMealInput)
 from src.services.inventory_service import InventoryService
 
 logger = logging.getLogger(__name__)
@@ -23,12 +25,14 @@ class MenuPlanService:
     """Service for menu planning"""
 
     @staticmethod
-    def create_menu_plan(db: Session, plan_data: MenuPlanCreate, user_id: UUID) -> MenuPlan:
+    def create_menu_plan(
+        db: Session, plan_data: MenuPlanCreate, user_id: UUID
+    ) -> MenuPlan:
         """Create new menu plan"""
         plan = MenuPlan(
             week_start_date=plan_data.week_start_date,
             name=plan_data.name,
-            created_by=user_id
+            created_by=user_id,
         )
         db.add(plan)
         db.commit()
@@ -42,9 +46,7 @@ class MenuPlanService:
 
     @staticmethod
     def list_menu_plans(
-        db: Session,
-        week_start: Optional[date] = None,
-        active_only: bool = True
+        db: Session, week_start: Optional[date] = None, active_only: bool = True
     ) -> List[MenuPlan]:
         """List menu plans with filters"""
         query = db.query(MenuPlan)
@@ -59,9 +61,7 @@ class MenuPlanService:
 
     @staticmethod
     def update_menu_plan(
-        db: Session,
-        plan_id: UUID,
-        plan_data: MenuPlanUpdate
+        db: Session, plan_id: UUID, plan_data: MenuPlanUpdate
     ) -> Optional[MenuPlan]:
         """Update menu plan"""
         plan = db.query(MenuPlan).filter(MenuPlan.id == plan_id).first()
@@ -88,7 +88,7 @@ class MenuPlanService:
                     meal_date=meal_data.meal_date,
                     meal_type=meal_data.meal_type,
                     servings_planned=meal_data.servings_planned,
-                    notes=meal_data.notes
+                    notes=meal_data.notes,
                 )
                 db.add(meal)
 
@@ -109,9 +109,7 @@ class MenuPlanService:
 
     @staticmethod
     def add_meal_to_plan(
-        db: Session,
-        plan_id: UUID,
-        meal_data: PlannedMealInput
+        db: Session, plan_id: UUID, meal_data: PlannedMealInput
     ) -> Optional[PlannedMeal]:
         """Add meal to menu plan"""
         # Verify plan exists
@@ -120,10 +118,11 @@ class MenuPlanService:
             return None
 
         # Verify recipe exists
-        recipe = db.query(Recipe).filter(
-            Recipe.id == meal_data.recipe_id,
-            Recipe.is_deleted == False
-        ).first()
+        recipe = (
+            db.query(Recipe)
+            .filter(Recipe.id == meal_data.recipe_id, Recipe.is_deleted == False)
+            .first()
+        )
         if not recipe:
             return None
 
@@ -133,7 +132,7 @@ class MenuPlanService:
             meal_date=meal_data.meal_date,
             meal_type=meal_data.meal_type,
             servings_planned=meal_data.servings_planned,
-            notes=meal_data.notes
+            notes=meal_data.notes,
         )
         db.add(meal)
         db.commit()
@@ -142,10 +141,7 @@ class MenuPlanService:
 
     @staticmethod
     def mark_meal_cooked(
-        db: Session,
-        plan_id: UUID,
-        meal_id: UUID,
-        user_id: UUID
+        db: Session, plan_id: UUID, meal_id: UUID, user_id: UUID
     ) -> Tuple[Optional[PlannedMeal], List[Dict]]:
         """
         Mark meal as cooked and auto-deduct ingredients from inventory.
@@ -153,10 +149,11 @@ class MenuPlanService:
         Returns:
             Tuple of (meal, inventory_changes)
         """
-        meal = db.query(PlannedMeal).filter(
-            PlannedMeal.id == meal_id,
-            PlannedMeal.menu_plan_id == plan_id
-        ).first()
+        meal = (
+            db.query(PlannedMeal)
+            .filter(PlannedMeal.id == meal_id, PlannedMeal.menu_plan_id == plan_id)
+            .first()
+        )
 
         if not meal:
             return None, []
@@ -173,17 +170,23 @@ class MenuPlanService:
             recipe.times_cooked = (recipe.times_cooked or 0) + 1
 
         # Get recipe ingredients for current version
-        version = db.query(RecipeVersion).filter(
-            RecipeVersion.recipe_id == meal.recipe_id,
-            RecipeVersion.version_number == recipe.current_version
-        ).first()
+        version = (
+            db.query(RecipeVersion)
+            .filter(
+                RecipeVersion.recipe_id == meal.recipe_id,
+                RecipeVersion.version_number == recipe.current_version,
+            )
+            .first()
+        )
 
         inventory_changes = []
 
         if version:
-            ingredients = db.query(Ingredient).filter(
-                Ingredient.recipe_version_id == version.id
-            ).all()
+            ingredients = (
+                db.query(Ingredient)
+                .filter(Ingredient.recipe_version_id == version.id)
+                .all()
+            )
 
             # Deduct ingredients from inventory
             for ing in ingredients:
@@ -191,14 +194,20 @@ class MenuPlanService:
                     continue  # Don't deduct optional ingredients
 
                 # Try to find matching inventory item
-                item = db.query(InventoryItem).filter(
-                    InventoryItem.item_name.ilike(ing.name)
-                ).first()
+                item = (
+                    db.query(InventoryItem)
+                    .filter(InventoryItem.item_name.ilike(ing.name))
+                    .first()
+                )
 
                 if item and ing.quantity:
                     # Calculate quantity to deduct (adjust for servings)
-                    servings_ratio = (meal.servings_planned or version.servings or 1) / (version.servings or 1)
-                    quantity_to_deduct = Decimal(str(ing.quantity)) * Decimal(str(servings_ratio))
+                    servings_ratio = (
+                        meal.servings_planned or version.servings or 1
+                    ) / (version.servings or 1)
+                    quantity_to_deduct = Decimal(str(ing.quantity)) * Decimal(
+                        str(servings_ratio)
+                    )
 
                     # Deduct from inventory
                     success = InventoryService.deduct_quantity(
@@ -206,14 +215,16 @@ class MenuPlanService:
                         item.id,
                         quantity_to_deduct,
                         f"Used for {recipe.title}",
-                        user_id
+                        user_id,
                     )
 
                     if success:
-                        inventory_changes.append({
-                            "item_name": item.item_name,
-                            "quantity_deducted": float(quantity_to_deduct)
-                        })
+                        inventory_changes.append(
+                            {
+                                "item_name": item.item_name,
+                                "quantity_deducted": float(quantity_to_deduct),
+                            }
+                        )
 
         db.commit()
         db.refresh(meal)
@@ -232,10 +243,7 @@ class MenuPlanService:
 
     @staticmethod
     def copy_menu_plan(
-        db: Session,
-        plan_id: UUID,
-        new_week_start: date,
-        user_id: UUID
+        db: Session, plan_id: UUID, new_week_start: date, user_id: UUID
     ) -> Optional[MenuPlan]:
         """
         Copy an existing menu plan to a new week.
@@ -255,15 +263,15 @@ class MenuPlanService:
             return None
 
         # Get source meals
-        source_meals = db.query(PlannedMeal).filter(
-            PlannedMeal.menu_plan_id == plan_id
-        ).all()
+        source_meals = (
+            db.query(PlannedMeal).filter(PlannedMeal.menu_plan_id == plan_id).all()
+        )
 
         # Create new plan
         new_plan = MenuPlan(
             week_start_date=new_week_start,
             name=f"{source_plan.name} (Copy)",
-            created_by=user_id
+            created_by=user_id,
         )
         db.add(new_plan)
         db.flush()  # Get the ID
@@ -278,7 +286,7 @@ class MenuPlanService:
                 meal_date=source_meal.meal_date + timedelta(days=week_offset),
                 meal_type=source_meal.meal_type,
                 servings_planned=source_meal.servings_planned,
-                notes=source_meal.notes
+                notes=source_meal.notes,
             )
             db.add(new_meal)
 
@@ -288,10 +296,7 @@ class MenuPlanService:
 
     @staticmethod
     def suggest_week_plan(
-        db: Session,
-        week_start: date,
-        user_id: UUID,
-        strategy: str = "rotation"
+        db: Session, week_start: date, user_id: UUID, strategy: str = "rotation"
     ) -> MenuPlan:
         """
         Auto-generate a week plan using recipe suggestions.
@@ -313,17 +318,14 @@ class MenuPlanService:
         plan = MenuPlan(
             week_start_date=week_start,
             name=f"Suggested Plan - Week of {week_start.isoformat()}",
-            created_by=user_id
+            created_by=user_id,
         )
         db.add(plan)
         db.flush()
 
         # Get recipe suggestions (request more than needed for variety)
         suggestions = RecipeSuggestionService.get_suggestions(
-            db,
-            user_id,
-            strategy,
-            limit=30
+            db, user_id, strategy, limit=30
         )
 
         if not suggestions:
@@ -363,7 +365,7 @@ class MenuPlanService:
                     meal_date=meal_date,
                     meal_type=meal_type,
                     servings_planned=4,  # Default servings
-                    notes=None
+                    notes=None,
                 )
                 db.add(meal)
 

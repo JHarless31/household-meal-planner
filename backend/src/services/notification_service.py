@@ -3,16 +3,17 @@ Notification Service
 Business logic for generating and managing user notifications
 """
 
-from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
-from datetime import datetime, date, timedelta
-from uuid import UUID
 import logging
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, List, Optional
+from uuid import UUID
 
-from src.models.notification import Notification
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session
+
 from src.models.inventory import InventoryItem
 from src.models.menu_plan import MenuPlan, PlannedMeal
+from src.models.notification import Notification
 from src.models.recipe import Recipe
 from src.models.user import User
 
@@ -29,7 +30,7 @@ class NotificationService:
         notification_type: str,
         title: str,
         message: str,
-        link: Optional[str] = None
+        link: Optional[str] = None,
     ) -> Notification:
         """
         Create a new notification.
@@ -50,7 +51,7 @@ class NotificationService:
             type=notification_type,
             title=title,
             message=message,
-            link=link
+            link=link,
         )
         db.add(notification)
         db.commit()
@@ -59,10 +60,7 @@ class NotificationService:
 
     @staticmethod
     def get_user_notifications(
-        db: Session,
-        user_id: UUID,
-        unread_only: bool = False,
-        limit: int = 50
+        db: Session, user_id: UUID, unread_only: bool = False, limit: int = 50
     ) -> List[Notification]:
         """
         Get notifications for a user.
@@ -76,24 +74,20 @@ class NotificationService:
         Returns:
             List of notifications
         """
-        query = db.query(Notification).filter(
-            Notification.user_id == user_id
-        )
+        query = db.query(Notification).filter(Notification.user_id == user_id)
 
         if unread_only:
             query = query.filter(Notification.is_read == False)
 
-        notifications = query.order_by(
-            Notification.created_at.desc()
-        ).limit(limit).all()
+        notifications = (
+            query.order_by(Notification.created_at.desc()).limit(limit).all()
+        )
 
         return notifications
 
     @staticmethod
     def mark_as_read(
-        db: Session,
-        notification_id: UUID,
-        user_id: UUID
+        db: Session, notification_id: UUID, user_id: UUID
     ) -> Optional[Notification]:
         """
         Mark a notification as read.
@@ -106,10 +100,11 @@ class NotificationService:
         Returns:
             Updated notification or None if not found
         """
-        notification = db.query(Notification).filter(
-            Notification.id == notification_id,
-            Notification.user_id == user_id
-        ).first()
+        notification = (
+            db.query(Notification)
+            .filter(Notification.id == notification_id, Notification.user_id == user_id)
+            .first()
+        )
 
         if not notification:
             return None
@@ -120,10 +115,7 @@ class NotificationService:
         return notification
 
     @staticmethod
-    def mark_all_as_read(
-        db: Session,
-        user_id: UUID
-    ) -> int:
+    def mark_all_as_read(db: Session, user_id: UUID) -> int:
         """
         Mark all notifications as read for a user.
 
@@ -134,20 +126,17 @@ class NotificationService:
         Returns:
             Number of notifications marked as read
         """
-        count = db.query(Notification).filter(
-            Notification.user_id == user_id,
-            Notification.is_read == False
-        ).update({"is_read": True})
+        count = (
+            db.query(Notification)
+            .filter(Notification.user_id == user_id, Notification.is_read == False)
+            .update({"is_read": True})
+        )
 
         db.commit()
         return count
 
     @staticmethod
-    def delete_notification(
-        db: Session,
-        notification_id: UUID,
-        user_id: UUID
-    ) -> bool:
+    def delete_notification(db: Session, notification_id: UUID, user_id: UUID) -> bool:
         """
         Delete a notification.
 
@@ -159,10 +148,11 @@ class NotificationService:
         Returns:
             True if deleted, False if not found
         """
-        notification = db.query(Notification).filter(
-            Notification.id == notification_id,
-            Notification.user_id == user_id
-        ).first()
+        notification = (
+            db.query(Notification)
+            .filter(Notification.id == notification_id, Notification.user_id == user_id)
+            .first()
+        )
 
         if not notification:
             return False
@@ -172,10 +162,7 @@ class NotificationService:
         return True
 
     @staticmethod
-    def get_unread_count(
-        db: Session,
-        user_id: UUID
-    ) -> int:
+    def get_unread_count(db: Session, user_id: UUID) -> int:
         """
         Get count of unread notifications for a user.
 
@@ -186,17 +173,17 @@ class NotificationService:
         Returns:
             Count of unread notifications
         """
-        count = db.query(Notification).filter(
-            Notification.user_id == user_id,
-            Notification.is_read == False
-        ).count()
+        count = (
+            db.query(Notification)
+            .filter(Notification.user_id == user_id, Notification.is_read == False)
+            .count()
+        )
 
         return count
 
     @staticmethod
     def generate_low_stock_notifications(
-        db: Session,
-        threshold_percentage: float = 0.2
+        db: Session, threshold_percentage: float = 0.2
     ) -> int:
         """
         Generate notifications for low stock items.
@@ -211,9 +198,13 @@ class NotificationService:
             Number of notifications created
         """
         # Find items at or below threshold
-        low_stock_items = db.query(InventoryItem).filter(
-            InventoryItem.quantity <= InventoryItem.threshold * threshold_percentage
-        ).all()
+        low_stock_items = (
+            db.query(InventoryItem)
+            .filter(
+                InventoryItem.quantity <= InventoryItem.threshold * threshold_percentage
+            )
+            .all()
+        )
 
         # Get all active users to notify
         users = db.query(User).filter(User.is_active == True).all()
@@ -223,12 +214,16 @@ class NotificationService:
         for item in low_stock_items:
             for user in users:
                 # Check if notification already exists for this item
-                existing = db.query(Notification).filter(
-                    Notification.user_id == user.id,
-                    Notification.type == "low_stock",
-                    Notification.is_read == False,
-                    Notification.message.like(f"%{item.item_name}%")
-                ).first()
+                existing = (
+                    db.query(Notification)
+                    .filter(
+                        Notification.user_id == user.id,
+                        Notification.type == "low_stock",
+                        Notification.is_read == False,
+                        Notification.message.like(f"%{item.item_name}%"),
+                    )
+                    .first()
+                )
 
                 if not existing:
                     NotificationService.create_notification(
@@ -237,17 +232,14 @@ class NotificationService:
                         "low_stock",
                         f"Low Stock: {item.item_name}",
                         f"{item.item_name} is running low. Current: {item.quantity} {item.unit or ''}, Threshold: {item.threshold}",
-                        f"/inventory"
+                        f"/inventory",
                     )
                     notifications_created += 1
 
         return notifications_created
 
     @staticmethod
-    def generate_expiring_notifications(
-        db: Session,
-        days_threshold: int = 3
-    ) -> int:
+    def generate_expiring_notifications(db: Session, days_threshold: int = 3) -> int:
         """
         Generate notifications for expiring items.
 
@@ -263,11 +255,15 @@ class NotificationService:
         expiration_date = date.today() + timedelta(days=days_threshold)
 
         # Find items expiring soon
-        expiring_items = db.query(InventoryItem).filter(
-            InventoryItem.expiration_date.isnot(None),
-            InventoryItem.expiration_date <= expiration_date,
-            InventoryItem.expiration_date >= date.today()
-        ).all()
+        expiring_items = (
+            db.query(InventoryItem)
+            .filter(
+                InventoryItem.expiration_date.isnot(None),
+                InventoryItem.expiration_date <= expiration_date,
+                InventoryItem.expiration_date >= date.today(),
+            )
+            .all()
+        )
 
         # Get all active users to notify
         users = db.query(User).filter(User.is_active == True).all()
@@ -279,32 +275,37 @@ class NotificationService:
 
             for user in users:
                 # Check if notification already exists for this item
-                existing = db.query(Notification).filter(
-                    Notification.user_id == user.id,
-                    Notification.type == "expiring",
-                    Notification.is_read == False,
-                    Notification.message.like(f"%{item.item_name}%")
-                ).first()
+                existing = (
+                    db.query(Notification)
+                    .filter(
+                        Notification.user_id == user.id,
+                        Notification.type == "expiring",
+                        Notification.is_read == False,
+                        Notification.message.like(f"%{item.item_name}%"),
+                    )
+                    .first()
+                )
 
                 if not existing:
-                    urgency = "today" if days_until_expiry == 0 else f"in {days_until_expiry} days"
+                    urgency = (
+                        "today"
+                        if days_until_expiry == 0
+                        else f"in {days_until_expiry} days"
+                    )
                     NotificationService.create_notification(
                         db,
                         user.id,
                         "expiring",
                         f"Expiring Soon: {item.item_name}",
                         f"{item.item_name} expires {urgency} ({item.expiration_date.isoformat()}).",
-                        f"/inventory"
+                        f"/inventory",
                     )
                     notifications_created += 1
 
         return notifications_created
 
     @staticmethod
-    def generate_meal_reminders(
-        db: Session,
-        days_ahead: int = 1
-    ) -> int:
+    def generate_meal_reminders(db: Session, days_ahead: int = 1) -> int:
         """
         Generate notifications for upcoming meals.
 
@@ -321,16 +322,18 @@ class NotificationService:
         end_date = start_date + timedelta(days=days_ahead)
 
         # Find upcoming meals
-        upcoming_meals = db.query(PlannedMeal).join(
-            MenuPlan, PlannedMeal.menu_plan_id == MenuPlan.id
-        ).join(
-            Recipe, PlannedMeal.recipe_id == Recipe.id
-        ).filter(
-            PlannedMeal.meal_date >= start_date,
-            PlannedMeal.meal_date <= end_date,
-            PlannedMeal.cooked == False,
-            MenuPlan.is_active == True
-        ).all()
+        upcoming_meals = (
+            db.query(PlannedMeal)
+            .join(MenuPlan, PlannedMeal.menu_plan_id == MenuPlan.id)
+            .join(Recipe, PlannedMeal.recipe_id == Recipe.id)
+            .filter(
+                PlannedMeal.meal_date >= start_date,
+                PlannedMeal.meal_date <= end_date,
+                PlannedMeal.cooked == False,
+                MenuPlan.is_active == True,
+            )
+            .all()
+        )
 
         # Get all active users to notify
         users = db.query(User).filter(User.is_active == True).all()
@@ -343,17 +346,29 @@ class NotificationService:
                 continue
 
             days_until_meal = (meal.meal_date - date.today()).days
-            timing = "today" if days_until_meal == 0 else f"tomorrow" if days_until_meal == 1 else f"in {days_until_meal} days"
+            timing = (
+                "today"
+                if days_until_meal == 0
+                else (
+                    f"tomorrow"
+                    if days_until_meal == 1
+                    else f"in {days_until_meal} days"
+                )
+            )
 
             for user in users:
                 # Check if notification already exists for this meal
-                existing = db.query(Notification).filter(
-                    Notification.user_id == user.id,
-                    Notification.type == "meal_reminder",
-                    Notification.is_read == False,
-                    Notification.message.like(f"%{recipe.title}%"),
-                    Notification.message.like(f"%{meal.meal_date}%")
-                ).first()
+                existing = (
+                    db.query(Notification)
+                    .filter(
+                        Notification.user_id == user.id,
+                        Notification.type == "meal_reminder",
+                        Notification.is_read == False,
+                        Notification.message.like(f"%{recipe.title}%"),
+                        Notification.message.like(f"%{meal.meal_date}%"),
+                    )
+                    .first()
+                )
 
                 if not existing:
                     NotificationService.create_notification(
@@ -362,7 +377,7 @@ class NotificationService:
                         "meal_reminder",
                         f"Meal Reminder: {meal.meal_type.title() if meal.meal_type else 'Meal'}",
                         f"{recipe.title} is planned for {meal.meal_type or 'meal'} {timing} ({meal.meal_date.isoformat()}).",
-                        f"/menu-plans"
+                        f"/menu-plans",
                     )
                     notifications_created += 1
 
@@ -370,10 +385,7 @@ class NotificationService:
 
     @staticmethod
     def generate_recipe_update_notification(
-        db: Session,
-        recipe_id: UUID,
-        updated_by: UUID,
-        version_number: int
+        db: Session, recipe_id: UUID, updated_by: UUID, version_number: int
     ) -> int:
         """
         Generate notification when a recipe is updated.
@@ -394,10 +406,9 @@ class NotificationService:
             return 0
 
         # Get all active users except the updater
-        users = db.query(User).filter(
-            User.is_active == True,
-            User.id != updated_by
-        ).all()
+        users = (
+            db.query(User).filter(User.is_active == True, User.id != updated_by).all()
+        )
 
         notifications_created = 0
 
@@ -408,7 +419,7 @@ class NotificationService:
                 "recipe_update",
                 f"Recipe Updated: {recipe.title}",
                 f"{recipe.title} has been updated to version {version_number}.",
-                f"/recipes/{recipe_id}"
+                f"/recipes/{recipe_id}",
             )
             notifications_created += 1
 
