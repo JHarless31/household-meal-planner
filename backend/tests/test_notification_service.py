@@ -3,15 +3,16 @@ Unit Tests for Notification Service
 Tests notification creation, management, and automated generation
 """
 
-import pytest
 from datetime import date, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
-from src.services.notification_service import NotificationService
-from src.models.notification import Notification
+import pytest
+
 from src.models.inventory import InventoryItem
 from src.models.menu_plan import MenuPlan, PlannedMeal
-from decimal import Decimal
+from src.models.notification import Notification
+from src.services.notification_service import NotificationService
 
 
 @pytest.mark.unit
@@ -26,7 +27,7 @@ class TestNotificationService:
             "low_stock",
             "Low Stock Alert",
             "Item running low",
-            "/inventory"
+            "/inventory",
         )
 
         assert notif.id is not None
@@ -75,9 +76,7 @@ class TestNotificationService:
                 db, test_user.id, "test", f"Test {i}", f"Message {i}"
             )
 
-        notifs = NotificationService.get_user_notifications(
-            db, test_user.id, limit=5
-        )
+        notifs = NotificationService.get_user_notifications(db, test_user.id, limit=5)
 
         assert len(notifs) == 5
 
@@ -117,10 +116,11 @@ class TestNotificationService:
         assert count == 5
 
         # Check all marked read
-        unread = db.query(Notification).filter(
-            Notification.user_id == test_user.id,
-            Notification.is_read == False
-        ).count()
+        unread = (
+            db.query(Notification)
+            .filter(Notification.user_id == test_user.id, Notification.is_read == False)
+            .count()
+        )
         assert unread == 0
 
     def test_delete_notification_success(self, db, test_notification, test_user):
@@ -131,9 +131,11 @@ class TestNotificationService:
 
         assert result is True
 
-        notif = db.query(Notification).filter(
-            Notification.id == test_notification.id
-        ).first()
+        notif = (
+            db.query(Notification)
+            .filter(Notification.id == test_notification.id)
+            .first()
+        )
         assert notif is None
 
     def test_delete_notification_unauthorized(self, db, test_notification, admin_user):
@@ -173,7 +175,7 @@ class TestNotificationService:
             quantity=Decimal("1"),
             unit="pcs",
             category="other",
-            threshold=Decimal("10")
+            threshold=Decimal("10"),
         )
         db.add(item)
         db.commit()
@@ -183,10 +185,13 @@ class TestNotificationService:
         assert count >= 1
 
         # Check notification created
-        notif = db.query(Notification).filter(
-            Notification.user_id == test_user.id,
-            Notification.type == "low_stock"
-        ).first()
+        notif = (
+            db.query(Notification)
+            .filter(
+                Notification.user_id == test_user.id, Notification.type == "low_stock"
+            )
+            .first()
+        )
         assert notif is not None
         assert "Low Stock Item" in notif.message
 
@@ -197,7 +202,7 @@ class TestNotificationService:
             quantity=Decimal("1"),
             unit="pcs",
             category="other",
-            threshold=Decimal("10")
+            threshold=Decimal("10"),
         )
         db.add(item)
         db.commit()
@@ -217,20 +222,25 @@ class TestNotificationService:
             quantity=Decimal("5"),
             unit="pcs",
             category="other",
-            expiration_date=date.today() + timedelta(days=2)
+            expiration_date=date.today() + timedelta(days=2),
         )
         db.add(item)
         db.commit()
 
-        count = NotificationService.generate_expiring_notifications(db, days_threshold=3)
+        count = NotificationService.generate_expiring_notifications(
+            db, days_threshold=3
+        )
 
         assert count >= 1
 
         # Check notification created
-        notif = db.query(Notification).filter(
-            Notification.user_id == test_user.id,
-            Notification.type == "expiring"
-        ).first()
+        notif = (
+            db.query(Notification)
+            .filter(
+                Notification.user_id == test_user.id, Notification.type == "expiring"
+            )
+            .first()
+        )
         assert notif is not None
         assert "Expiring Item" in notif.message
 
@@ -241,7 +251,7 @@ class TestNotificationService:
             quantity=Decimal("5"),
             unit="pcs",
             category="other",
-            expiration_date=date.today() - timedelta(days=1)
+            expiration_date=date.today() - timedelta(days=1),
         )
         db.add(item)
         db.commit()
@@ -249,10 +259,14 @@ class TestNotificationService:
         count = NotificationService.generate_expiring_notifications(db)
 
         # Should not create notification for expired item
-        notif = db.query(Notification).filter(
-            Notification.type == "expiring",
-            Notification.message.like("%Already Expired%")
-        ).first()
+        notif = (
+            db.query(Notification)
+            .filter(
+                Notification.type == "expiring",
+                Notification.message.like("%Already Expired%"),
+            )
+            .first()
+        )
         assert notif is None
 
     def test_generate_meal_reminders(self, db, test_user, test_recipe):
@@ -262,7 +276,7 @@ class TestNotificationService:
             week_start_date=date.today(),
             name="Test Plan",
             created_by=test_user.id,
-            is_active=True
+            is_active=True,
         )
         db.add(plan)
         db.flush()
@@ -273,7 +287,7 @@ class TestNotificationService:
             meal_date=date.today() + timedelta(days=1),
             meal_type="dinner",
             servings_planned=4,
-            cooked=False
+            cooked=False,
         )
         db.add(meal)
         db.commit()
@@ -283,10 +297,14 @@ class TestNotificationService:
         assert count >= 1
 
         # Check notification created
-        notif = db.query(Notification).filter(
-            Notification.user_id == test_user.id,
-            Notification.type == "meal_reminder"
-        ).first()
+        notif = (
+            db.query(Notification)
+            .filter(
+                Notification.user_id == test_user.id,
+                Notification.type == "meal_reminder",
+            )
+            .first()
+        )
         assert notif is not None
         assert test_recipe.title in notif.message
 
@@ -296,7 +314,7 @@ class TestNotificationService:
             week_start_date=date.today(),
             name="Test Plan",
             created_by=test_user.id,
-            is_active=True
+            is_active=True,
         )
         db.add(plan)
         db.flush()
@@ -307,7 +325,7 @@ class TestNotificationService:
             meal_date=date.today(),
             meal_type="dinner",
             servings_planned=4,
-            cooked=True
+            cooked=True,
         )
         db.add(meal)
         db.commit()
@@ -315,13 +333,19 @@ class TestNotificationService:
         count = NotificationService.generate_meal_reminders(db, days_ahead=0)
 
         # Should not create notification for cooked meal
-        notif = db.query(Notification).filter(
-            Notification.type == "meal_reminder",
-            Notification.message.like(f"%{test_recipe.title}%")
-        ).first()
+        notif = (
+            db.query(Notification)
+            .filter(
+                Notification.type == "meal_reminder",
+                Notification.message.like(f"%{test_recipe.title}%"),
+            )
+            .first()
+        )
         assert notif is None
 
-    def test_generate_recipe_update_notification(self, db, test_recipe, test_user, admin_user):
+    def test_generate_recipe_update_notification(
+        self, db, test_recipe, test_user, admin_user
+    ):
         """Test generating recipe update notification"""
         count = NotificationService.generate_recipe_update_notification(
             db, test_recipe.id, test_user.id, 2
@@ -330,14 +354,22 @@ class TestNotificationService:
         assert count >= 1
 
         # Check admin got notification (but not the updater)
-        admin_notif = db.query(Notification).filter(
-            Notification.user_id == admin_user.id,
-            Notification.type == "recipe_update"
-        ).first()
+        admin_notif = (
+            db.query(Notification)
+            .filter(
+                Notification.user_id == admin_user.id,
+                Notification.type == "recipe_update",
+            )
+            .first()
+        )
         assert admin_notif is not None
 
-        user_notif = db.query(Notification).filter(
-            Notification.user_id == test_user.id,
-            Notification.type == "recipe_update"
-        ).first()
+        user_notif = (
+            db.query(Notification)
+            .filter(
+                Notification.user_id == test_user.id,
+                Notification.type == "recipe_update",
+            )
+            .first()
+        )
         assert user_notif is None  # Updater should not be notified

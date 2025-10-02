@@ -3,15 +3,16 @@ Rating Service
 Business logic for recipe ratings and favorites calculation
 """
 
-from typing import List, Optional, Dict
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from uuid import UUID
 import logging
+from typing import Dict, List, Optional
+from uuid import UUID
 
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from src.models.app_settings import AppSettings
 from src.models.rating import Rating
 from src.models.recipe import Recipe
-from src.models.app_settings import AppSettings
 from src.schemas.rating import RatingCreate
 
 logger = logging.getLogger(__name__)
@@ -22,17 +23,15 @@ class RatingService:
 
     @staticmethod
     def create_or_update_rating(
-        db: Session,
-        recipe_id: UUID,
-        user_id: UUID,
-        rating_data: RatingCreate
+        db: Session, recipe_id: UUID, user_id: UUID, rating_data: RatingCreate
     ) -> Rating:
         """Create or update rating for recipe"""
         # Check if rating already exists
-        existing = db.query(Rating).filter(
-            Rating.recipe_id == recipe_id,
-            Rating.user_id == user_id
-        ).first()
+        existing = (
+            db.query(Rating)
+            .filter(Rating.recipe_id == recipe_id, Rating.user_id == user_id)
+            .first()
+        )
 
         if existing:
             # Update existing rating
@@ -49,7 +48,7 @@ class RatingService:
                 user_id=user_id,
                 rating=rating_data.rating,
                 feedback=rating_data.feedback,
-                modifications=rating_data.modifications
+                modifications=rating_data.modifications,
             )
             db.add(rating)
             db.commit()
@@ -96,21 +95,22 @@ class RatingService:
             "thumbs_up_count": thumbs_up,
             "thumbs_down_count": thumbs_down,
             "total_ratings": total,
-            "is_favorite": is_favorite
+            "is_favorite": is_favorite,
         }
 
     @staticmethod
     def update_rating(
-        db: Session,
-        rating_id: UUID,
-        user_id: UUID,
-        rating_data: RatingCreate
+        db: Session, rating_id: UUID, user_id: UUID, rating_data: RatingCreate
     ) -> Optional[Rating]:
         """Update existing rating"""
-        rating = db.query(Rating).filter(
-            Rating.id == rating_id,
-            Rating.user_id == user_id  # Ensure user owns the rating
-        ).first()
+        rating = (
+            db.query(Rating)
+            .filter(
+                Rating.id == rating_id,
+                Rating.user_id == user_id,  # Ensure user owns the rating
+            )
+            .first()
+        )
 
         if not rating:
             return None
@@ -126,10 +126,11 @@ class RatingService:
     @staticmethod
     def delete_rating(db: Session, rating_id: UUID, user_id: UUID) -> bool:
         """Delete rating (user must own it)"""
-        rating = db.query(Rating).filter(
-            Rating.id == rating_id,
-            Rating.user_id == user_id
-        ).first()
+        rating = (
+            db.query(Rating)
+            .filter(Rating.id == rating_id, Rating.user_id == user_id)
+            .first()
+        )
 
         if not rating:
             return False
@@ -139,12 +140,15 @@ class RatingService:
         return True
 
     @staticmethod
-    def get_user_rating(db: Session, recipe_id: UUID, user_id: UUID) -> Optional[Rating]:
+    def get_user_rating(
+        db: Session, recipe_id: UUID, user_id: UUID
+    ) -> Optional[Rating]:
         """Get specific user's rating for a recipe"""
-        return db.query(Rating).filter(
-            Rating.recipe_id == recipe_id,
-            Rating.user_id == user_id
-        ).first()
+        return (
+            db.query(Rating)
+            .filter(Rating.recipe_id == recipe_id, Rating.user_id == user_id)
+            .first()
+        )
 
     @staticmethod
     def is_favorite(db: Session, recipe_id: UUID) -> bool:

@@ -3,16 +3,18 @@ Unit Tests for Menu Plan Service
 Tests menu planning, meal tracking, and auto-deduction
 """
 
-import pytest
 from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-from src.services.menu_plan_service import MenuPlanService
-from src.schemas.menu_plan import MenuPlanCreate, MenuPlanUpdate, PlannedMealInput
+import pytest
+
+from src.models.inventory import InventoryItem
 from src.models.menu_plan import MenuPlan, PlannedMeal
 from src.models.recipe import Recipe
-from src.models.inventory import InventoryItem
+from src.schemas.menu_plan import (MenuPlanCreate, MenuPlanUpdate,
+                                   PlannedMealInput)
+from src.services.menu_plan_service import MenuPlanService
 
 
 @pytest.mark.unit
@@ -21,10 +23,7 @@ class TestMenuPlanService:
 
     def test_create_menu_plan_success(self, db, test_user):
         """Test successful menu plan creation"""
-        plan_data = MenuPlanCreate(
-            week_start_date=date.today(),
-            name="Test Menu Plan"
-        )
+        plan_data = MenuPlanCreate(week_start_date=date.today(), name="Test Menu Plan")
 
         plan = MenuPlanService.create_menu_plan(db, plan_data, test_user.id)
 
@@ -51,8 +50,7 @@ class TestMenuPlanService:
         # Create multiple plans
         for i in range(3):
             plan_data = MenuPlanCreate(
-                week_start_date=date.today() + timedelta(weeks=i),
-                name=f"Plan {i}"
+                week_start_date=date.today() + timedelta(weeks=i), name=f"Plan {i}"
             )
             MenuPlanService.create_menu_plan(db, plan_data, test_user.id)
 
@@ -141,7 +139,7 @@ class TestMenuPlanService:
             meal_date=date.today(),
             meal_type="dinner",
             servings_planned=4,
-            notes="Test notes"
+            notes="Test notes",
         )
 
         meal = MenuPlanService.add_meal_to_plan(db, test_menu_plan.id, meal_data)
@@ -157,7 +155,7 @@ class TestMenuPlanService:
             recipe_id=test_recipe.id,
             meal_date=date.today(),
             meal_type="dinner",
-            servings_planned=4
+            servings_planned=4,
         )
 
         meal = MenuPlanService.add_meal_to_plan(db, uuid4(), meal_data)
@@ -170,7 +168,7 @@ class TestMenuPlanService:
             recipe_id=uuid4(),
             meal_date=date.today(),
             meal_type="dinner",
-            servings_planned=4
+            servings_planned=4,
         )
 
         meal = MenuPlanService.add_meal_to_plan(db, test_menu_plan.id, meal_data)
@@ -188,7 +186,9 @@ class TestMenuPlanService:
         assert meal.cooked_by == test_user.id
 
         # Check recipe stats updated
-        recipe = db.query(Recipe).filter(Recipe.id == test_planned_meal.recipe_id).first()
+        recipe = (
+            db.query(Recipe).filter(Recipe.id == test_planned_meal.recipe_id).first()
+        )
         assert recipe.times_cooked == 1
         assert recipe.last_cooked_date == date.today()
 
@@ -197,10 +197,7 @@ class TestMenuPlanService:
         # Create inventory items matching recipe ingredients
         for ing_name in ["chicken", "rice", "vegetables"]:
             item = InventoryItem(
-                item_name=ing_name,
-                quantity=Decimal("1000"),
-                unit="g",
-                category="other"
+                item_name=ing_name, quantity=Decimal("1000"), unit="g", category="other"
             )
             db.add(item)
         db.commit()
@@ -213,7 +210,7 @@ class TestMenuPlanService:
             recipe_id=test_recipe.id,
             meal_date=date.today(),
             meal_type="dinner",
-            servings_planned=4
+            servings_planned=4,
         )
         meal = MenuPlanService.add_meal_to_plan(db, plan.id, meal_data)
 
@@ -224,9 +221,9 @@ class TestMenuPlanService:
 
         assert len(changes) == 3
         # Check inventory was deducted
-        chicken = db.query(InventoryItem).filter(
-            InventoryItem.item_name == "chicken"
-        ).first()
+        chicken = (
+            db.query(InventoryItem).filter(InventoryItem.item_name == "chicken").first()
+        )
         assert chicken.quantity < Decimal("1000")
 
     def test_mark_meal_cooked_not_found(self, db, test_user):
@@ -244,9 +241,9 @@ class TestMenuPlanService:
 
         assert result is True
 
-        meal = db.query(PlannedMeal).filter(
-            PlannedMeal.id == test_planned_meal.id
-        ).first()
+        meal = (
+            db.query(PlannedMeal).filter(PlannedMeal.id == test_planned_meal.id).first()
+        )
         assert meal is None
 
     def test_remove_meal_not_found(self, db):
@@ -258,10 +255,7 @@ class TestMenuPlanService:
     def test_copy_menu_plan_success(self, db, test_user, test_recipe):
         """Test copying menu plan to new week"""
         # Create source plan with meals
-        plan_data = MenuPlanCreate(
-            week_start_date=date.today(),
-            name="Original Plan"
-        )
+        plan_data = MenuPlanCreate(week_start_date=date.today(), name="Original Plan")
         source_plan = MenuPlanService.create_menu_plan(db, plan_data, test_user.id)
 
         # Add meals
@@ -270,7 +264,7 @@ class TestMenuPlanService:
                 recipe_id=test_recipe.id,
                 meal_date=date.today() + timedelta(days=i),
                 meal_type="dinner",
-                servings_planned=4
+                servings_planned=4,
             )
             MenuPlanService.add_meal_to_plan(db, source_plan.id, meal_data)
 
@@ -286,9 +280,9 @@ class TestMenuPlanService:
         assert "(Copy)" in new_plan.name
 
         # Check meals were copied
-        new_meals = db.query(PlannedMeal).filter(
-            PlannedMeal.menu_plan_id == new_plan.id
-        ).all()
+        new_meals = (
+            db.query(PlannedMeal).filter(PlannedMeal.menu_plan_id == new_plan.id).all()
+        )
         assert len(new_meals) == 3
 
         # Check dates were adjusted
@@ -313,9 +307,7 @@ class TestMenuPlanService:
         assert "Suggested Plan" in plan.name
 
         # Check meals were added
-        meals = db.query(PlannedMeal).filter(
-            PlannedMeal.menu_plan_id == plan.id
-        ).all()
+        meals = db.query(PlannedMeal).filter(PlannedMeal.menu_plan_id == plan.id).all()
         assert len(meals) > 0
 
     def test_suggest_week_plan_variety_enforcement(self, db, test_user, test_recipes):
@@ -324,9 +316,7 @@ class TestMenuPlanService:
             db, date.today(), test_user.id, strategy="rotation"
         )
 
-        meals = db.query(PlannedMeal).filter(
-            PlannedMeal.menu_plan_id == plan.id
-        ).all()
+        meals = db.query(PlannedMeal).filter(PlannedMeal.menu_plan_id == plan.id).all()
 
         # Check no recipe appears twice
         recipe_ids = [meal.recipe_id for meal in meals]
@@ -341,7 +331,5 @@ class TestMenuPlanService:
         assert plan is not None
 
         # Should create empty plan
-        meals = db.query(PlannedMeal).filter(
-            PlannedMeal.menu_plan_id == plan.id
-        ).all()
+        meals = db.query(PlannedMeal).filter(PlannedMeal.menu_plan_id == plan.id).all()
         assert len(meals) == 0

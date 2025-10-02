@@ -3,12 +3,13 @@ Unit Tests for Rating Service
 Tests rating CRUD operations and favorites calculation
 """
 
-import pytest
 from uuid import uuid4
 
-from src.services.rating_service import RatingService
-from src.schemas.rating import RatingCreate
+import pytest
+
 from src.models.rating import Rating
+from src.schemas.rating import RatingCreate
+from src.services.rating_service import RatingService
 
 
 @pytest.mark.unit
@@ -18,9 +19,7 @@ class TestRatingService:
     def test_create_rating_success(self, db, test_recipe, test_user):
         """Test successful rating creation"""
         rating_data = RatingCreate(
-            rating=True,
-            feedback="Excellent recipe!",
-            modifications="Added more salt"
+            rating=True, feedback="Excellent recipe!", modifications="Added more salt"
         )
 
         rating = RatingService.create_or_update_rating(
@@ -35,10 +34,7 @@ class TestRatingService:
 
     def test_create_rating_thumbs_down(self, db, test_recipe, test_user):
         """Test creating thumbs down rating"""
-        rating_data = RatingCreate(
-            rating=False,
-            feedback="Not my favorite"
-        )
+        rating_data = RatingCreate(rating=False, feedback="Not my favorite")
 
         rating = RatingService.create_or_update_rating(
             db, test_recipe.id, test_user.id, rating_data
@@ -65,10 +61,11 @@ class TestRatingService:
         assert updated.feedback == "Changed my mind"
 
         # Should still be only one rating
-        count = db.query(Rating).filter(
-            Rating.recipe_id == test_recipe.id,
-            Rating.user_id == test_user.id
-        ).count()
+        count = (
+            db.query(Rating)
+            .filter(Rating.recipe_id == test_recipe.id, Rating.user_id == test_user.id)
+            .count()
+        )
         assert count == 1
 
     def test_get_rating_by_id(self, db, test_rating):
@@ -88,13 +85,17 @@ class TestRatingService:
         """Test getting all ratings for a recipe"""
         # Create multiple ratings
         rating_data = RatingCreate(rating=True)
-        RatingService.create_or_update_rating(db, test_recipe.id, test_user.id, rating_data)
+        RatingService.create_or_update_rating(
+            db, test_recipe.id, test_user.id, rating_data
+        )
 
         ratings = RatingService.get_recipe_ratings(db, test_recipe.id)
 
         assert len(ratings) >= 1
 
-    def test_get_rating_summary_with_ratings(self, db, test_recipe, test_user, admin_user):
+    def test_get_rating_summary_with_ratings(
+        self, db, test_recipe, test_user, admin_user
+    ):
         """Test rating summary calculation"""
         # Create ratings
         RatingService.create_or_update_rating(
@@ -123,8 +124,8 @@ class TestRatingService:
     def test_favorites_calculation_meets_threshold(self, db, test_recipe):
         """Test that recipe becomes favorite when meeting threshold"""
         # Create test users and ratings (need at least 3 raters for default)
-        from src.models.user import User
         from src.core.security import SecurityManager
+        from src.models.user import User
 
         users = []
         for i in range(4):
@@ -132,7 +133,7 @@ class TestRatingService:
                 username=f"user{i}",
                 email=f"user{i}@test.com",
                 password_hash=SecurityManager.hash_password("pass"),
-                role="user"
+                role="user",
             )
             db.add(user)
             users.append(user)
@@ -151,8 +152,8 @@ class TestRatingService:
 
     def test_favorites_calculation_below_threshold(self, db, test_recipe):
         """Test that recipe is not favorite below threshold"""
-        from src.models.user import User
         from src.core.security import SecurityManager
+        from src.models.user import User
 
         users = []
         for i in range(4):
@@ -160,7 +161,7 @@ class TestRatingService:
                 username=f"user{i}",
                 email=f"user{i}@test.com",
                 password_hash=SecurityManager.hash_password("pass"),
-                role="user"
+                role="user",
             )
             db.add(user)
             users.append(user)
@@ -170,8 +171,10 @@ class TestRatingService:
         # Add 2 thumbs up, 2 thumbs down (50% - below 75% threshold)
         for i, user in enumerate(users):
             RatingService.create_or_update_rating(
-                db, test_recipe.id, user.id,
-                RatingCreate(rating=True if i < 2 else False)
+                db,
+                test_recipe.id,
+                user.id,
+                RatingCreate(rating=True if i < 2 else False),
             )
 
         summary = RatingService.get_rating_summary(db, test_recipe.id)
@@ -191,10 +194,7 @@ class TestRatingService:
 
     def test_update_rating_by_id(self, db, test_rating, test_user):
         """Test updating rating by ID"""
-        rating_data = RatingCreate(
-            rating=False,
-            feedback="Updated feedback"
-        )
+        rating_data = RatingCreate(rating=False, feedback="Updated feedback")
 
         updated = RatingService.update_rating(
             db, test_rating.id, test_user.id, rating_data
@@ -260,8 +260,8 @@ class TestRatingService:
 
     def test_is_favorite(self, db, test_recipe):
         """Test is_favorite helper method"""
-        from src.models.user import User
         from src.core.security import SecurityManager
+        from src.models.user import User
 
         # Create users and give thumbs up
         users = []
@@ -270,7 +270,7 @@ class TestRatingService:
                 username=f"fav_user{i}",
                 email=f"fav{i}@test.com",
                 password_hash=SecurityManager.hash_password("pass"),
-                role="user"
+                role="user",
             )
             db.add(user)
             users.append(user)

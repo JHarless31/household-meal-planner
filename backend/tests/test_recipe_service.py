@@ -3,13 +3,14 @@ Unit Tests for Recipe Service
 Tests recipe CRUD operations, versioning, and rotation tracking
 """
 
-import pytest
 from datetime import date, timedelta
 from uuid import uuid4
 
+import pytest
+
+from src.models.recipe import Ingredient, Recipe, RecipeVersion
+from src.schemas.recipe import IngredientInput, RecipeCreate, RecipeUpdate
 from src.services.recipe_service import RecipeService
-from src.schemas.recipe import RecipeCreate, RecipeUpdate, IngredientInput
-from src.models.recipe import Recipe, RecipeVersion, Ingredient
 
 
 @pytest.mark.unit
@@ -27,10 +28,14 @@ class TestRecipeService:
             difficulty="easy",
             instructions="Test instructions",
             ingredients=[
-                IngredientInput(name="ingredient1", quantity=100, unit="g", category="other"),
-                IngredientInput(name="ingredient2", quantity=200, unit="ml", category="other")
+                IngredientInput(
+                    name="ingredient1", quantity=100, unit="g", category="other"
+                ),
+                IngredientInput(
+                    name="ingredient2", quantity=200, unit="ml", category="other"
+                ),
             ],
-            tags=["tag1", "tag2"]
+            tags=["tag1", "tag2"],
         )
 
         recipe = RecipeService.create_recipe(db, recipe_data, test_user.id)
@@ -41,18 +46,23 @@ class TestRecipeService:
         assert recipe.created_by == test_user.id
 
         # Check version created
-        version = db.query(RecipeVersion).filter(
-            RecipeVersion.recipe_id == recipe.id,
-            RecipeVersion.version_number == 1
-        ).first()
+        version = (
+            db.query(RecipeVersion)
+            .filter(
+                RecipeVersion.recipe_id == recipe.id, RecipeVersion.version_number == 1
+            )
+            .first()
+        )
         assert version is not None
         assert version.prep_time_minutes == 10
         assert version.cook_time_minutes == 20
 
         # Check ingredients created
-        ingredients = db.query(Ingredient).filter(
-            Ingredient.recipe_version_id == version.id
-        ).all()
+        ingredients = (
+            db.query(Ingredient)
+            .filter(Ingredient.recipe_version_id == version.id)
+            .all()
+        )
         assert len(ingredients) == 2
 
     def test_create_recipe_with_source_url(self, db, test_user):
@@ -66,7 +76,7 @@ class TestRecipeService:
             servings=2,
             difficulty="medium",
             instructions="Instructions",
-            ingredients=[]
+            ingredients=[],
         )
 
         recipe = RecipeService.create_recipe(db, recipe_data, test_user.id)
@@ -109,7 +119,7 @@ class TestRecipeService:
             difficulty="hard",
             instructions="New instructions",
             ingredients=[],
-            tags=[]
+            tags=[],
         )
         RecipeService.update_recipe(db, test_recipe.id, recipe_data, test_user.id)
 
@@ -157,10 +167,14 @@ class TestRecipeService:
 
         assert total == 2
         for recipe in recipes:
-            version = db.query(RecipeVersion).filter(
-                RecipeVersion.recipe_id == recipe.id,
-                RecipeVersion.version_number == recipe.current_version
-            ).first()
+            version = (
+                db.query(RecipeVersion)
+                .filter(
+                    RecipeVersion.recipe_id == recipe.id,
+                    RecipeVersion.version_number == recipe.current_version,
+                )
+                .first()
+            )
             assert version.difficulty == "easy"
 
     def test_list_recipes_filter_never_tried(self, db, test_user, test_recipes):
@@ -203,21 +217,29 @@ class TestRecipeService:
             instructions="Updated instructions",
             change_description="Major update",
             ingredients=[
-                IngredientInput(name="new_ingredient", quantity=150, unit="g", category="other")
+                IngredientInput(
+                    name="new_ingredient", quantity=150, unit="g", category="other"
+                )
             ],
-            tags=["new_tag"]
+            tags=["new_tag"],
         )
 
-        updated = RecipeService.update_recipe(db, test_recipe.id, recipe_data, test_user.id)
+        updated = RecipeService.update_recipe(
+            db, test_recipe.id, recipe_data, test_user.id
+        )
 
         assert updated.current_version == original_version + 1
         assert updated.title == "Updated Title"
 
         # Check new version exists
-        new_version = db.query(RecipeVersion).filter(
-            RecipeVersion.recipe_id == test_recipe.id,
-            RecipeVersion.version_number == original_version + 1
-        ).first()
+        new_version = (
+            db.query(RecipeVersion)
+            .filter(
+                RecipeVersion.recipe_id == test_recipe.id,
+                RecipeVersion.version_number == original_version + 1,
+            )
+            .first()
+        )
         assert new_version is not None
         assert new_version.change_description == "Major update"
 
@@ -232,7 +254,7 @@ class TestRecipeService:
             difficulty="easy",
             instructions="Instructions",
             ingredients=[],
-            tags=[]
+            tags=[],
         )
 
         updated = RecipeService.update_recipe(db, uuid4(), recipe_data, test_user.id)
@@ -269,7 +291,7 @@ class TestRecipeService:
                 difficulty="easy",
                 instructions="Instructions",
                 ingredients=[],
-                tags=[]
+                tags=[],
             )
             RecipeService.update_recipe(db, test_recipe.id, recipe_data, test_user.id)
 
@@ -293,7 +315,7 @@ class TestRecipeService:
             difficulty="hard",
             instructions="Bad instructions",
             ingredients=[],
-            tags=[]
+            tags=[],
         )
         RecipeService.update_recipe(db, test_recipe.id, recipe_data, test_user.id)
 
@@ -304,14 +326,22 @@ class TestRecipeService:
         assert reverted.current_version == 3  # Creates new version as copy
 
         # Check version 3 has same data as version 1
-        version3 = db.query(RecipeVersion).filter(
-            RecipeVersion.recipe_id == test_recipe.id,
-            RecipeVersion.version_number == 3
-        ).first()
-        version1 = db.query(RecipeVersion).filter(
-            RecipeVersion.recipe_id == test_recipe.id,
-            RecipeVersion.version_number == 1
-        ).first()
+        version3 = (
+            db.query(RecipeVersion)
+            .filter(
+                RecipeVersion.recipe_id == test_recipe.id,
+                RecipeVersion.version_number == 3,
+            )
+            .first()
+        )
+        version1 = (
+            db.query(RecipeVersion)
+            .filter(
+                RecipeVersion.recipe_id == test_recipe.id,
+                RecipeVersion.version_number == 1,
+            )
+            .first()
+        )
 
         assert version3.prep_time_minutes == version1.prep_time_minutes
         assert version3.cook_time_minutes == version1.cook_time_minutes

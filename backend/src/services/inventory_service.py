@@ -3,15 +3,16 @@ Inventory Service
 Business logic for inventory management and history tracking
 """
 
-from typing import List, Optional, Tuple
-from sqlalchemy.orm import Session
-from datetime import datetime, date, timedelta
-from uuid import UUID
-from decimal import Decimal
 import logging
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from typing import List, Optional, Tuple
+from uuid import UUID
 
-from src.models.inventory import InventoryItem, InventoryHistory
+from sqlalchemy.orm import Session
+
 from src.models.app_settings import AppSettings
+from src.models.inventory import InventoryHistory, InventoryItem
 from src.schemas.inventory import InventoryItemCreate, InventoryItemUpdate
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,9 @@ class InventoryService:
     """Service for inventory management"""
 
     @staticmethod
-    def create_item(db: Session, item_data: InventoryItemCreate, user_id: UUID) -> InventoryItem:
+    def create_item(
+        db: Session, item_data: InventoryItemCreate, user_id: UUID
+    ) -> InventoryItem:
         """Create new inventory item"""
         item = InventoryItem(**item_data.model_dump())
         db.add(item)
@@ -34,7 +37,7 @@ class InventoryService:
             quantity_before=0,
             quantity_after=item.quantity,
             reason="Initial inventory",
-            changed_by=user_id
+            changed_by=user_id,
         )
         db.add(history)
         db.commit()
@@ -51,7 +54,7 @@ class InventoryService:
         db: Session,
         category: Optional[str] = None,
         location: Optional[str] = None,
-        low_stock: bool = False
+        low_stock: bool = False,
     ) -> List[InventoryItem]:
         """List inventory items with filters"""
         query = db.query(InventoryItem)
@@ -69,10 +72,7 @@ class InventoryService:
 
     @staticmethod
     def update_item(
-        db: Session,
-        item_id: UUID,
-        item_data: InventoryItemUpdate,
-        user_id: UUID
+        db: Session, item_id: UUID, item_data: InventoryItemUpdate, user_id: UUID
     ) -> Optional[InventoryItem]:
         """Update inventory item and track history"""
         item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
@@ -86,7 +86,7 @@ class InventoryService:
             setattr(item, field, value)
 
         # Track quantity changes
-        if 'quantity' in item_data.model_dump(exclude_unset=True):
+        if "quantity" in item_data.model_dump(exclude_unset=True):
             new_quantity = item_data.quantity
             if new_quantity != old_quantity:
                 history = InventoryHistory(
@@ -95,7 +95,7 @@ class InventoryService:
                     quantity_before=old_quantity,
                     quantity_after=new_quantity,
                     reason="Manual adjustment",
-                    changed_by=user_id
+                    changed_by=user_id,
                 )
                 db.add(history)
 
@@ -117,22 +117,31 @@ class InventoryService:
     @staticmethod
     def get_low_stock_items(db: Session) -> List[InventoryItem]:
         """Get items below minimum stock"""
-        return db.query(InventoryItem).filter(
-            InventoryItem.quantity <= InventoryItem.minimum_stock
-        ).all()
+        return (
+            db.query(InventoryItem)
+            .filter(InventoryItem.quantity <= InventoryItem.minimum_stock)
+            .all()
+        )
 
     @staticmethod
-    def get_expiring_items(db: Session, days: int = 7) -> List[Tuple[InventoryItem, int]]:
+    def get_expiring_items(
+        db: Session, days: int = 7
+    ) -> List[Tuple[InventoryItem, int]]:
         """Get items expiring within specified days"""
         settings = db.query(AppSettings).first()
         warning_days = settings.expiration_warning_days if settings else days
 
         cutoff_date = date.today() + timedelta(days=warning_days)
 
-        items = db.query(InventoryItem).filter(
-            InventoryItem.expiration_date != None,
-            InventoryItem.expiration_date <= cutoff_date
-        ).order_by(InventoryItem.expiration_date).all()
+        items = (
+            db.query(InventoryItem)
+            .filter(
+                InventoryItem.expiration_date != None,
+                InventoryItem.expiration_date <= cutoff_date,
+            )
+            .order_by(InventoryItem.expiration_date)
+            .all()
+        )
 
         # Calculate days until expiration
         result = []
@@ -145,9 +154,12 @@ class InventoryService:
     @staticmethod
     def get_item_history(db: Session, item_id: UUID) -> List[InventoryHistory]:
         """Get quantity change history for item"""
-        return db.query(InventoryHistory).filter(
-            InventoryHistory.inventory_id == item_id
-        ).order_by(InventoryHistory.changed_at.desc()).all()
+        return (
+            db.query(InventoryHistory)
+            .filter(InventoryHistory.inventory_id == item_id)
+            .order_by(InventoryHistory.changed_at.desc())
+            .all()
+        )
 
     @staticmethod
     def deduct_quantity(
@@ -155,7 +167,7 @@ class InventoryService:
         item_id: UUID,
         quantity: Decimal,
         reason: str,
-        user_id: Optional[UUID] = None
+        user_id: Optional[UUID] = None,
     ) -> bool:
         """
         Deduct quantity from inventory (for auto-deduction when meal cooked).
@@ -186,7 +198,7 @@ class InventoryService:
             quantity_before=old_quantity,
             quantity_after=new_quantity,
             reason=reason,
-            changed_by=user_id
+            changed_by=user_id,
         )
         db.add(history)
         db.commit()
@@ -198,23 +210,20 @@ class InventoryService:
         db: Session,
         name: str,
         unit: Optional[str] = None,
-        category: Optional[str] = None
+        category: Optional[str] = None,
     ) -> InventoryItem:
         """Find existing item by name or create new one"""
         # Try to find existing item
-        item = db.query(InventoryItem).filter(
-            InventoryItem.item_name.ilike(name)
-        ).first()
+        item = (
+            db.query(InventoryItem).filter(InventoryItem.item_name.ilike(name)).first()
+        )
 
         if item:
             return item
 
         # Create new item with zero quantity
         item = InventoryItem(
-            item_name=name,
-            quantity=Decimal(0),
-            unit=unit,
-            category=category
+            item_name=name, quantity=Decimal(0), unit=unit, category=category
         )
         db.add(item)
         db.commit()

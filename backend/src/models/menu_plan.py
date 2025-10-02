@@ -3,11 +3,13 @@ Menu Planning Models
 Models for weekly menu plans and planned meals
 """
 
-from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, ForeignKey, Date, CheckConstraint
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import (Boolean, CheckConstraint, Column, Date, DateTime,
+                        ForeignKey, Integer, String, Text)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
-import uuid
 
 from src.core.database import BaseMealPlanning
 
@@ -25,22 +27,38 @@ class MenuPlan(BaseMealPlanning):
         created_at: Plan creation timestamp
         updated_at: Plan update timestamp
     """
+
     __tablename__ = "menu_plans"
     __table_args__ = (
-        CheckConstraint("EXTRACT(ISODOW FROM week_start_date) = 1", name="chk_week_start_monday"),
-        {"schema": "meal_planning"}
+        CheckConstraint(
+            "EXTRACT(ISODOW FROM week_start_date) = 1", name="chk_week_start_monday"
+        ),
+        {"schema": "meal_planning"},
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     week_start_date = Column(Date, nullable=False, index=True)
     name = Column(String(100), nullable=True)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("shared.users.id"), nullable=False, index=True)
+    created_by = Column(
+        UUID(as_uuid=True), ForeignKey("shared.users.id"), nullable=False, index=True
+    )
     is_active = Column(Boolean, default=True, nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     # Relationships
-    meals = relationship("PlannedMeal", back_populates="menu_plan", cascade="all, delete-orphan")
+    meals = relationship(
+        "PlannedMeal", back_populates="menu_plan", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<MenuPlan(id={self.id}, week_start={self.week_start_date}, name={self.name})>"
@@ -62,16 +80,30 @@ class PlannedMeal(BaseMealPlanning):
         cooked_date: When meal was marked cooked
         cooked_by: User who cooked the meal
     """
+
     __tablename__ = "planned_meals"
     __table_args__ = (
-        CheckConstraint("meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')", name="chk_meal_type_valid"),
+        CheckConstraint(
+            "meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')",
+            name="chk_meal_type_valid",
+        ),
         CheckConstraint("servings_planned > 0", name="chk_servings_positive"),
-        {"schema": "meal_planning"}
+        {"schema": "meal_planning"},
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    menu_plan_id = Column(UUID(as_uuid=True), ForeignKey("meal_planning.menu_plans.id", ondelete="CASCADE"), nullable=False, index=True)
-    recipe_id = Column(UUID(as_uuid=True), ForeignKey("meal_planning.recipes.id", ondelete="CASCADE"), nullable=False, index=True)
+    menu_plan_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("meal_planning.menu_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    recipe_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("meal_planning.recipes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     meal_date = Column(Date, nullable=False, index=True)
     meal_type = Column(String(20), nullable=False)
     servings_planned = Column(Integer, nullable=True)

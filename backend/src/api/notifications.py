@@ -1,8 +1,10 @@
 """Notifications API Routes"""
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+
 from typing import Optional
 from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
 from src.core.database import get_db
 from src.core.security import get_current_user
@@ -17,7 +19,7 @@ async def get_notifications(
     unread_only: bool = Query(False, description="Only return unread notifications"),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get notifications for the current user.
@@ -30,10 +32,7 @@ async def get_notifications(
         List of notifications with unread count
     """
     notifications = NotificationService.get_user_notifications(
-        db,
-        current_user.id,
-        unread_only,
-        limit
+        db, current_user.id, unread_only, limit
     )
 
     unread_count = NotificationService.get_unread_count(db, current_user.id)
@@ -47,19 +46,18 @@ async def get_notifications(
                 "message": notif.message,
                 "link": notif.link,
                 "is_read": notif.is_read,
-                "created_at": notif.created_at.isoformat()
+                "created_at": notif.created_at.isoformat(),
             }
             for notif in notifications
         ],
         "unread_count": unread_count,
-        "total": len(notifications)
+        "total": len(notifications),
     }
 
 
 @router.get("/unread-count", response_model=dict)
 async def get_unread_count(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Get count of unread notifications for the current user."""
     count = NotificationService.get_unread_count(db, current_user.id)
@@ -70,7 +68,7 @@ async def get_unread_count(
 async def mark_notification_read(
     notificationId: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Mark a notification as read.
@@ -93,14 +91,13 @@ async def mark_notification_read(
         "message": notification.message,
         "link": notification.link,
         "is_read": notification.is_read,
-        "created_at": notification.created_at.isoformat()
+        "created_at": notification.created_at.isoformat(),
     }
 
 
 @router.post("/mark-all-read", response_model=dict)
 async def mark_all_notifications_read(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Mark all notifications as read for the current user."""
     count = NotificationService.mark_all_as_read(db, current_user.id)
@@ -111,10 +108,12 @@ async def mark_all_notifications_read(
 async def delete_notification(
     notificationId: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Delete a notification."""
-    success = NotificationService.delete_notification(db, notificationId, current_user.id)
+    success = NotificationService.delete_notification(
+        db, notificationId, current_user.id
+    )
 
     if not success:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -122,8 +121,7 @@ async def delete_notification(
 
 @router.post("/generate/low-stock", response_model=dict)
 async def generate_low_stock_notifications(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     Generate notifications for low stock items.
@@ -138,9 +136,11 @@ async def generate_low_stock_notifications(
 
 @router.post("/generate/expiring", response_model=dict)
 async def generate_expiring_notifications(
-    days: int = Query(3, ge=1, le=14, description="Days ahead to check for expiring items"),
+    days: int = Query(
+        3, ge=1, le=14, description="Days ahead to check for expiring items"
+    ),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Generate notifications for expiring items.
@@ -157,7 +157,7 @@ async def generate_expiring_notifications(
 async def generate_meal_reminders(
     days: int = Query(1, ge=1, le=7, description="Days ahead to remind for meals"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Generate meal reminder notifications.

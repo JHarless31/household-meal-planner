@@ -3,12 +3,13 @@ Unit Tests for Shopping List Service
 Tests shopping list generation and inventory integration
 """
 
-import pytest
 from decimal import Decimal
 from uuid import uuid4
 
-from src.services.shopping_list_service import ShoppingListService
+import pytest
+
 from src.models.inventory import InventoryItem
+from src.services.shopping_list_service import ShoppingListService
 
 
 @pytest.mark.unit
@@ -25,15 +26,16 @@ class TestShoppingListService:
         assert result.menu_plan_id == test_planned_meal.menu_plan_id
         assert len(result.items) > 0
 
-    def test_generate_shopping_list_aggregates_ingredients(self, db, test_user, test_recipe):
+    def test_generate_shopping_list_aggregates_ingredients(
+        self, db, test_user, test_recipe
+    ):
         """Test that shopping list aggregates same ingredients"""
-        from src.models.menu_plan import MenuPlan, PlannedMeal
         from datetime import date
 
+        from src.models.menu_plan import MenuPlan, PlannedMeal
+
         plan = MenuPlan(
-            week_start_date=date.today(),
-            name="Test Plan",
-            created_by=test_user.id
+            week_start_date=date.today(), name="Test Plan", created_by=test_user.id
         )
         db.add(plan)
         db.flush()
@@ -46,7 +48,7 @@ class TestShoppingListService:
                 meal_date=date.today(),
                 meal_type="dinner",
                 servings_planned=4,
-                cooked=False
+                cooked=False,
             )
             db.add(meal)
 
@@ -59,13 +61,12 @@ class TestShoppingListService:
 
     def test_generate_shopping_list_checks_inventory(self, db, test_user, test_recipe):
         """Test that shopping list checks against inventory"""
-        from src.models.menu_plan import MenuPlan, PlannedMeal
         from datetime import date
 
+        from src.models.menu_plan import MenuPlan, PlannedMeal
+
         plan = MenuPlan(
-            week_start_date=date.today(),
-            name="Test Plan",
-            created_by=test_user.id
+            week_start_date=date.today(), name="Test Plan", created_by=test_user.id
         )
         db.add(plan)
         db.flush()
@@ -76,16 +77,13 @@ class TestShoppingListService:
             meal_date=date.today(),
             meal_type="dinner",
             servings_planned=4,
-            cooked=False
+            cooked=False,
         )
         db.add(meal)
 
         # Add inventory for one ingredient (enough stock)
         item = InventoryItem(
-            item_name="chicken",
-            quantity=Decimal("1000"),
-            unit="g",
-            category="meat"
+            item_name="chicken", quantity=Decimal("1000"), unit="g", category="meat"
         )
         db.add(item)
         db.commit()
@@ -96,15 +94,16 @@ class TestShoppingListService:
         item_names = [item.name.lower() for item in result.items]
         assert "chicken" not in item_names
 
-    def test_generate_shopping_list_calculates_deficit(self, db, test_user, test_recipe):
+    def test_generate_shopping_list_calculates_deficit(
+        self, db, test_user, test_recipe
+    ):
         """Test shopping list calculates deficit when partial stock"""
-        from src.models.menu_plan import MenuPlan, PlannedMeal
         from datetime import date
 
+        from src.models.menu_plan import MenuPlan, PlannedMeal
+
         plan = MenuPlan(
-            week_start_date=date.today(),
-            name="Test Plan",
-            created_by=test_user.id
+            week_start_date=date.today(), name="Test Plan", created_by=test_user.id
         )
         db.add(plan)
         db.flush()
@@ -115,16 +114,13 @@ class TestShoppingListService:
             meal_date=date.today(),
             meal_type="dinner",
             servings_planned=4,
-            cooked=False
+            cooked=False,
         )
         db.add(meal)
 
         # Add partial inventory (need 200g, have 100g)
         item = InventoryItem(
-            item_name="rice",
-            quantity=Decimal("100"),
-            unit="g",
-            category="grain"
+            item_name="rice", quantity=Decimal("100"), unit="g", category="grain"
         )
         db.add(item)
         db.commit()
@@ -132,7 +128,9 @@ class TestShoppingListService:
         result = ShoppingListService.generate_shopping_list(db, plan.id)
 
         # Should include rice with deficit quantity
-        rice_item = next((item for item in result.items if item.name.lower() == "rice"), None)
+        rice_item = next(
+            (item for item in result.items if item.name.lower() == "rice"), None
+        )
         assert rice_item is not None
         assert rice_item.quantity == Decimal("100")  # Need 200 - have 100
 
@@ -149,26 +147,31 @@ class TestShoppingListService:
         # Should have no items (only meal is cooked)
         assert len(result.items) == 0
 
-    def test_generate_shopping_list_skips_optional_ingredients(self, db, test_user, test_recipe):
+    def test_generate_shopping_list_skips_optional_ingredients(
+        self, db, test_user, test_recipe
+    ):
         """Test that shopping list skips optional ingredients"""
-        from src.models.menu_plan import MenuPlan, PlannedMeal
-        from src.models.recipe import RecipeVersion, Ingredient
         from datetime import date
 
+        from src.models.menu_plan import MenuPlan, PlannedMeal
+        from src.models.recipe import Ingredient, RecipeVersion
+
         # Make one ingredient optional
-        version = db.query(RecipeVersion).filter(
-            RecipeVersion.recipe_id == test_recipe.id
-        ).first()
-        ing = db.query(Ingredient).filter(
-            Ingredient.recipe_version_id == version.id
-        ).first()
+        version = (
+            db.query(RecipeVersion)
+            .filter(RecipeVersion.recipe_id == test_recipe.id)
+            .first()
+        )
+        ing = (
+            db.query(Ingredient)
+            .filter(Ingredient.recipe_version_id == version.id)
+            .first()
+        )
         ing.is_optional = True
         db.commit()
 
         plan = MenuPlan(
-            week_start_date=date.today(),
-            name="Test Plan",
-            created_by=test_user.id
+            week_start_date=date.today(), name="Test Plan", created_by=test_user.id
         )
         db.add(plan)
         db.flush()
@@ -179,7 +182,7 @@ class TestShoppingListService:
             meal_date=date.today(),
             meal_type="dinner",
             servings_planned=4,
-            cooked=False
+            cooked=False,
         )
         db.add(meal)
         db.commit()
@@ -217,20 +220,17 @@ class TestShoppingListService:
     def test_mark_item_purchased_updates_inventory(self, db, test_user):
         """Test marking item purchased updates inventory"""
         result = ShoppingListService.mark_item_purchased(
-            db,
-            "New Item",
-            Decimal("5"),
-            "pcs",
-            "other",
-            test_user.id
+            db, "New Item", Decimal("5"), "pcs", "other", test_user.id
         )
 
         assert result is True
 
         # Check inventory item created
-        item = db.query(InventoryItem).filter(
-            InventoryItem.item_name == "New Item"
-        ).first()
+        item = (
+            db.query(InventoryItem)
+            .filter(InventoryItem.item_name == "New Item")
+            .first()
+        )
         assert item is not None
         assert item.quantity == Decimal("5")
 
@@ -241,24 +241,21 @@ class TestShoppingListService:
             item_name="Existing Item",
             quantity=Decimal("10"),
             unit="pcs",
-            category="other"
+            category="other",
         )
         db.add(item)
         db.commit()
 
         result = ShoppingListService.mark_item_purchased(
-            db,
-            "Existing Item",
-            Decimal("5"),
-            "pcs",
-            "other",
-            test_user.id
+            db, "Existing Item", Decimal("5"), "pcs", "other", test_user.id
         )
 
         assert result is True
 
         # Check quantity added
-        item = db.query(InventoryItem).filter(
-            InventoryItem.item_name == "Existing Item"
-        ).first()
+        item = (
+            db.query(InventoryItem)
+            .filter(InventoryItem.item_name == "Existing Item")
+            .first()
+        )
         assert item.quantity == Decimal("15")

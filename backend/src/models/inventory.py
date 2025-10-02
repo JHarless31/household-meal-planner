@@ -3,11 +3,13 @@ Inventory Models
 Models for inventory items and history tracking
 """
 
-from sqlalchemy import Column, String, Numeric, Text, DateTime, ForeignKey, Date, CheckConstraint
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import (CheckConstraint, Column, Date, DateTime, ForeignKey,
+                        Numeric, String, Text)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
-import uuid
 
 from src.core.database import BaseMealPlanning
 
@@ -29,12 +31,16 @@ class InventoryItem(BaseMealPlanning):
         created_at: Item creation timestamp
         updated_at: Last update timestamp
     """
+
     __tablename__ = "inventory"
     __table_args__ = (
         CheckConstraint("quantity >= 0", name="chk_quantity_non_negative"),
         CheckConstraint("minimum_stock >= 0", name="chk_minimum_stock_non_negative"),
-        CheckConstraint("location IN ('pantry', 'fridge', 'freezer', 'other')", name="chk_location_valid"),
-        {"schema": "meal_planning"}
+        CheckConstraint(
+            "location IN ('pantry', 'fridge', 'freezer', 'other')",
+            name="chk_location_valid",
+        ),
+        {"schema": "meal_planning"},
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -46,11 +52,24 @@ class InventoryItem(BaseMealPlanning):
     expiration_date = Column(Date, nullable=True, index=True)
     minimum_stock = Column(Numeric(10, 3), default=0, nullable=False)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     # Relationships
-    history = relationship("InventoryHistory", back_populates="inventory_item", cascade="all, delete-orphan")
+    history = relationship(
+        "InventoryHistory",
+        back_populates="inventory_item",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<InventoryItem(id={self.id}, item_name={self.item_name}, quantity={self.quantity})>"
@@ -70,20 +89,36 @@ class InventoryHistory(BaseMealPlanning):
         changed_by: User who made the change
         changed_at: Change timestamp
     """
+
     __tablename__ = "inventory_history"
     __table_args__ = (
-        CheckConstraint("change_type IN ('purchased', 'used', 'expired', 'adjusted', 'auto_deducted')", name="chk_change_type_valid"),
-        {"schema": "meal_planning"}
+        CheckConstraint(
+            "change_type IN ('purchased', 'used', 'expired', 'adjusted', 'auto_deducted')",
+            name="chk_change_type_valid",
+        ),
+        {"schema": "meal_planning"},
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    inventory_id = Column(UUID(as_uuid=True), ForeignKey("meal_planning.inventory.id", ondelete="CASCADE"), nullable=False, index=True)
+    inventory_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("meal_planning.inventory.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     change_type = Column(String(20), nullable=False, index=True)
     quantity_before = Column(Numeric(10, 3), nullable=False)
     quantity_after = Column(Numeric(10, 3), nullable=False)
     reason = Column(String(100), nullable=True)
-    changed_by = Column(UUID(as_uuid=True), ForeignKey("shared.users.id"), nullable=True)
-    changed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    changed_by = Column(
+        UUID(as_uuid=True), ForeignKey("shared.users.id"), nullable=True
+    )
+    changed_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
 
     # Relationships
     inventory_item = relationship("InventoryItem", back_populates="history")

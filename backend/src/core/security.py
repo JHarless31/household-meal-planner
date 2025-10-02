@@ -3,16 +3,18 @@ Security Module
 Handles authentication, JWT tokens, password hashing, and session management
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
-import jwt
-import bcrypt
 import hashlib
-from fastapi import HTTPException, status, Cookie, Response
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
+
+import bcrypt
+import jwt
+from fastapi import Cookie, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from src.core.config import settings
-from src.models.user import User, Session as UserSession
+from src.models.user import Session as UserSession
+from src.models.user import User
 
 
 class SecurityManager:
@@ -30,8 +32,8 @@ class SecurityManager:
             str: Hashed password
         """
         salt = bcrypt.gensalt()
-        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-        return hashed.decode('utf-8')
+        hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
+        return hashed.decode("utf-8")
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -47,14 +49,15 @@ class SecurityManager:
         """
         try:
             return bcrypt.checkpw(
-                plain_password.encode('utf-8'),
-                hashed_password.encode('utf-8')
+                plain_password.encode("utf-8"), hashed_password.encode("utf-8")
             )
         except Exception:
             return False
 
     @staticmethod
-    def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(
+        data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+    ) -> str:
         """
         Create a JWT access token.
 
@@ -69,10 +72,14 @@ class SecurityManager:
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(hours=settings.JWT_EXPIRATION_HOURS)
+            expire = datetime.now(timezone.utc) + timedelta(
+                hours=settings.JWT_EXPIRATION_HOURS
+            )
 
         to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
-        encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+        encoded_jwt = jwt.encode(
+            to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM
+        )
         return encoded_jwt
 
     @staticmethod
@@ -87,7 +94,9 @@ class SecurityManager:
             Optional[Dict]: Decoded token data or None if invalid
         """
         try:
-            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+            payload = jwt.decode(
+                token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
+            )
             return payload
         except jwt.ExpiredSignatureError:
             return None
@@ -113,7 +122,7 @@ class SecurityManager:
         user_id: str,
         token: str,
         ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        user_agent: Optional[str] = None,
     ) -> UserSession:
         """
         Create a new session in the database.
@@ -129,14 +138,16 @@ class SecurityManager:
             UserSession: Created session object
         """
         token_hash = SecurityManager.hash_token(token)
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.JWT_EXPIRATION_HOURS)
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            hours=settings.JWT_EXPIRATION_HOURS
+        )
 
         session = UserSession(
             user_id=user_id,
             token_hash=token_hash,
             expires_at=expires_at,
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
         )
         db.add(session)
         db.commit()
@@ -156,10 +167,14 @@ class SecurityManager:
             Optional[UserSession]: Session object or None if not found
         """
         token_hash = SecurityManager.hash_token(token)
-        session = db.query(UserSession).filter(
-            UserSession.token_hash == token_hash,
-            UserSession.expires_at > datetime.now(timezone.utc)
-        ).first()
+        session = (
+            db.query(UserSession)
+            .filter(
+                UserSession.token_hash == token_hash,
+                UserSession.expires_at > datetime.now(timezone.utc),
+            )
+            .first()
+        )
 
         if session:
             # Update last accessed time
@@ -181,7 +196,9 @@ class SecurityManager:
             bool: True if session was deleted, False otherwise
         """
         token_hash = SecurityManager.hash_token(token)
-        session = db.query(UserSession).filter(UserSession.token_hash == token_hash).first()
+        session = (
+            db.query(UserSession).filter(UserSession.token_hash == token_hash).first()
+        )
         if session:
             db.delete(session)
             db.commit()
@@ -199,17 +216,16 @@ class SecurityManager:
         Returns:
             int: Number of sessions deleted
         """
-        count = db.query(UserSession).filter(
-            UserSession.expires_at <= datetime.now(timezone.utc)
-        ).delete()
+        count = (
+            db.query(UserSession)
+            .filter(UserSession.expires_at <= datetime.now(timezone.utc))
+            .delete()
+        )
         db.commit()
         return count
 
 
-def get_current_user(
-    db: Session,
-    session: Optional[str] = Cookie(None)
-) -> User:
+def get_current_user(db: Session, session: Optional[str] = Cookie(None)) -> User:
     """
     Dependency to get current authenticated user from session cookie.
 
@@ -225,8 +241,7 @@ def get_current_user(
     """
     if not session:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
 
     # Verify token
@@ -234,7 +249,7 @@ def get_current_user(
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session"
+            detail="Invalid or expired session",
         )
 
     # Check session in database
@@ -242,21 +257,19 @@ def get_current_user(
     if not user_session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session not found or expired"
+            detail="Session not found or expired",
         )
 
     # Get user
     user = db.query(User).filter(User.id == payload.get("user_id")).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
         )
 
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
+            status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
         )
 
     return user
@@ -277,8 +290,7 @@ def require_admin(user: User = None) -> User:
     """
     if not user or user.role != "admin":
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
         )
     return user
 
@@ -297,7 +309,7 @@ def set_session_cookie(response: Response, token: str) -> None:
         httponly=True,
         secure=True,  # Set to False for local development without HTTPS
         samesite="strict",
-        max_age=settings.JWT_EXPIRATION_HOURS * 3600
+        max_age=settings.JWT_EXPIRATION_HOURS * 3600,
     )
 
 

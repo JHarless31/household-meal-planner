@@ -2,15 +2,16 @@
 Unit Tests for Recipe Suggestion Service
 """
 
-import pytest
 from datetime import date, timedelta
 from uuid import uuid4
 
-from src.services.recipe_suggestions import RecipeSuggestionService
-from src.models.recipe import Recipe, RecipeVersion, Ingredient
-from src.models.rating import Rating
+import pytest
+
 from src.models.inventory import InventoryItem
+from src.models.rating import Rating
+from src.models.recipe import Ingredient, Recipe, RecipeVersion
 from src.models.user import User
+from src.services.recipe_suggestions import RecipeSuggestionService
 
 
 class TestRecipeSuggestionService:
@@ -23,32 +24,34 @@ class TestRecipeSuggestionService:
             title="Never Cooked",
             created_by=test_user.id,
             times_cooked=0,
-            last_cooked_date=None
+            last_cooked_date=None,
         )
         recipe2 = Recipe(
             title="Cooked Recently",
             created_by=test_user.id,
             times_cooked=5,
-            last_cooked_date=date.today() - timedelta(days=2)
+            last_cooked_date=date.today() - timedelta(days=2),
         )
         recipe3 = Recipe(
             title="Cooked Long Ago",
             created_by=test_user.id,
             times_cooked=3,
-            last_cooked_date=date.today() - timedelta(days=60)
+            last_cooked_date=date.today() - timedelta(days=60),
         )
 
         db_session.add_all([recipe1, recipe2, recipe3])
         db_session.commit()
 
         # Get suggestions
-        suggestions = RecipeSuggestionService.suggest_by_rotation(db_session, test_user.id, limit=10)
+        suggestions = RecipeSuggestionService.suggest_by_rotation(
+            db_session, test_user.id, limit=10
+        )
 
         # Never cooked should be first
         assert len(suggestions) == 3
-        assert suggestions[0]['title'] == "Never Cooked"
-        assert suggestions[0]['times_cooked'] == 0
-        assert suggestions[0]['reason'] == "Never tried before"
+        assert suggestions[0]["title"] == "Never Cooked"
+        assert suggestions[0]["times_cooked"] == 0
+        assert suggestions[0]["reason"] == "Never tried before"
 
     def test_suggest_by_favorites(self, db_session, test_user):
         """Test that highly-rated recipes are suggested as favorites"""
@@ -60,37 +63,49 @@ class TestRecipeSuggestionService:
 
         # Add ratings
         for _ in range(5):
-            db_session.add(Rating(recipe_id=recipe1.id, user_id=test_user.id, rating=True))
+            db_session.add(
+                Rating(recipe_id=recipe1.id, user_id=test_user.id, rating=True)
+            )
         for _ in range(3):
-            db_session.add(Rating(recipe_id=recipe2.id, user_id=test_user.id, rating=True))
+            db_session.add(
+                Rating(recipe_id=recipe2.id, user_id=test_user.id, rating=True)
+            )
         for _ in range(2):
-            db_session.add(Rating(recipe_id=recipe2.id, user_id=test_user.id, rating=False))
+            db_session.add(
+                Rating(recipe_id=recipe2.id, user_id=test_user.id, rating=False)
+            )
         db_session.commit()
 
         # Get favorite suggestions
-        suggestions = RecipeSuggestionService.suggest_by_favorites(db_session, test_user.id, limit=10)
+        suggestions = RecipeSuggestionService.suggest_by_favorites(
+            db_session, test_user.id, limit=10
+        )
 
         # Highly rated should be first
         assert len(suggestions) >= 1
-        assert suggestions[0]['title'] == "Highly Rated"
-        assert suggestions[0]['rating_count'] == 5
+        assert suggestions[0]["title"] == "Highly Rated"
+        assert suggestions[0]["rating_count"] == 5
 
     def test_suggest_never_tried(self, db_session, test_user):
         """Test never-tried suggestions only include uncooked recipes"""
         # Create mix of cooked and never-cooked recipes
         recipe1 = Recipe(title="Never Tried 1", created_by=test_user.id, times_cooked=0)
-        recipe2 = Recipe(title="Already Cooked", created_by=test_user.id, times_cooked=1)
+        recipe2 = Recipe(
+            title="Already Cooked", created_by=test_user.id, times_cooked=1
+        )
         recipe3 = Recipe(title="Never Tried 2", created_by=test_user.id, times_cooked=0)
 
         db_session.add_all([recipe1, recipe2, recipe3])
         db_session.commit()
 
         # Get suggestions
-        suggestions = RecipeSuggestionService.suggest_never_tried(db_session, test_user.id, limit=10)
+        suggestions = RecipeSuggestionService.suggest_never_tried(
+            db_session, test_user.id, limit=10
+        )
 
         # Should only include never-cooked recipes
         assert len(suggestions) == 2
-        titles = [s['title'] for s in suggestions]
+        titles = [s["title"] for s in suggestions]
         assert "Never Tried 1" in titles
         assert "Never Tried 2" in titles
         assert "Already Cooked" not in titles
@@ -107,16 +122,22 @@ class TestRecipeSuggestionService:
             version_number=1,
             instructions="Cook pasta",
             servings=4,
-            modified_by=test_user.id
+            modified_by=test_user.id,
         )
         db_session.add(version)
         db_session.flush()
 
         # Add ingredients
         ingredients = [
-            Ingredient(recipe_version_id=version.id, name="pasta", quantity=200, unit="g"),
-            Ingredient(recipe_version_id=version.id, name="tomatoes", quantity=3, unit="pcs"),
-            Ingredient(recipe_version_id=version.id, name="cheese", quantity=100, unit="g"),
+            Ingredient(
+                recipe_version_id=version.id, name="pasta", quantity=200, unit="g"
+            ),
+            Ingredient(
+                recipe_version_id=version.id, name="tomatoes", quantity=3, unit="pcs"
+            ),
+            Ingredient(
+                recipe_version_id=version.id, name="cheese", quantity=100, unit="g"
+            ),
         ]
         db_session.add_all(ingredients)
 
@@ -135,9 +156,9 @@ class TestRecipeSuggestionService:
 
         # Should suggest recipe with 66% match
         assert len(suggestions) == 1
-        assert suggestions[0]['title'] == "Pasta Dish"
-        assert suggestions[0]['match_percent'] > 60
-        assert "cheese" in suggestions[0]['missing_ingredients']
+        assert suggestions[0]["title"] == "Pasta Dish"
+        assert suggestions[0]["match_percent"] > 60
+        assert "cheese" in suggestions[0]["missing_ingredients"]
 
     def test_suggest_quick_meals(self, db_session, test_user):
         """Test quick meal suggestions filter by time"""
@@ -154,7 +175,7 @@ class TestRecipeSuggestionService:
             instructions="Chop and mix",
             prep_time_minutes=10,
             cook_time_minutes=5,
-            modified_by=test_user.id
+            modified_by=test_user.id,
         )
         # Slow recipe version
         version2 = RecipeVersion(
@@ -163,7 +184,7 @@ class TestRecipeSuggestionService:
             instructions="Roast slowly",
             prep_time_minutes=20,
             cook_time_minutes=120,
-            modified_by=test_user.id
+            modified_by=test_user.id,
         )
         db_session.add_all([version1, version2])
         db_session.commit()
@@ -179,8 +200,8 @@ class TestRecipeSuggestionService:
 
         # Should only include quick salad
         assert len(suggestions) == 1
-        assert suggestions[0]['title'] == "Quick Salad"
-        assert suggestions[0]['total_time_minutes'] == 15
+        assert suggestions[0]["title"] == "Quick Salad"
+        assert suggestions[0]["total_time_minutes"] == 15
 
 
 # Fixtures
@@ -191,7 +212,7 @@ def test_user(db_session):
         username="testuser",
         email="test@example.com",
         password_hash="hashed",
-        role="user"
+        role="user",
     )
     db_session.add(user)
     db_session.commit()
