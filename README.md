@@ -464,7 +464,7 @@ Thank you to all contributors who have helped improve this project!
 
 ---
 
-**Version**: 1.0.1
+**Version**: 1.0.2
 **Last Updated**: October 1, 2025
 **Status**: Production Ready
 

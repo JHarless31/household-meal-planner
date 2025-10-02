@@ -1849,4 +1849,4 @@ All errors follow this format:
 
 **Document Version:** 1.0
 **Last Updated:** October 1, 2025
-**API Version:** 1.0.0
+**API Version:** 1.0.2

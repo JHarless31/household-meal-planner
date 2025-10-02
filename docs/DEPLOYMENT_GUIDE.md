@@ -174,12 +174,17 @@ cd meal-planning-system
 ### Step 2: Configure Environment
 
 ```bash
+# Navigate to infrastructure directory
+cd infrastructure
+
 # Copy example environment file
 cp .env.example .env
 
 # Edit .env file
 nano .env
 ```
+
+**Important:** The `.env` file must be in the `infrastructure/` directory where `docker-compose.yml` is located.
 
 **Required variables:**
 
@@ -331,6 +336,9 @@ git clone <repository-url> .
 #### 3.2 Configure Environment
 
 ```bash
+# Navigate to infrastructure directory
+cd /opt/meal-planning-system/infrastructure
+
 # Copy example environment file
 cp .env.example .env
 
@@ -340,6 +348,8 @@ openssl rand -hex 32
 # Edit environment file
 nano .env
 ```
+
+**Important:** The `.env` file must be in the `infrastructure/` directory where `docker-compose.yml` is located.
 
 **Production environment:**
 
@@ -1107,4 +1117,4 @@ sudo chmod 666 /var/run/docker.sock
 
 **Document Version:** 1.0
 **Last Updated:** October 1, 2025
-**Application Version:** 1.0.0
+**Application Version:** 1.0.2

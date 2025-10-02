@@ -19,6 +19,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2025-10-01
+
+### Fixed
+- **Critical**: Fixed frontend Dockerfile npm ci dependency installation
+  * Changed from `npm ci --only=production` to `npm ci`
+  * devDependencies (TypeScript, Next.js build tools) required for compilation
+  * Resolves Docker build failure with exit code 1
+- Removed root `.env` file (development artifact containing exposed API keys)
+  * Proper location is `infrastructure/.env` for docker-compose
+  * Eliminates docker-compose build configuration errors
+
+### Documentation
+- Updated DEPLOYMENT_GUIDE.md with correct `.env` file location
+  * Added navigation to `infrastructure/` directory in setup steps
+  * Clarified `.env` must be in same directory as `docker-compose.yml`
+  * Updated both local development and production deployment sections
+- Added `infrastructure/README.md` with deployment quick start guide
+  * Environment variable documentation
+  * Common Docker commands and troubleshooting
+  * Security best practices
+
+### Notes
+This is a critical patch release that fixes deployment-blocking issues discovered during installation testing. All users attempting to deploy v1.0.0 or v1.0.1 should upgrade to v1.0.2.
+
+---
+
 ## [1.0.1] - 2025-10-01
 
 ### Fixed
